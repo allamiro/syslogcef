@@ -1,0 +1,13 @@
+{
+  "deviceVendor": "Linux",
+  "deviceProduct": "Syslog",
+  "deviceVersion": "auto",
+  "eventClassId": "linux.%{msgid}",
+  "name": "%(message_short)s",
+  "extensions": {
+    "dhost": "%(host)s",
+    "sproc": "%(app)s",
+    "cs1Label": "rawEvent",
+    "cs1": "%(raw)s"
+  }
+}
