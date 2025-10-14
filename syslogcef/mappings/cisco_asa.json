@@ -1,0 +1,26 @@
+{
+  "deviceVendor": "Cisco",
+  "deviceProduct": "ASA",
+  "deviceVersion": "auto",
+  "eventClassId": "asa.%(event_code)s",
+  "name": "%(message_short)s",
+  "severity_map": {
+    "0": "10",
+    "1": "8",
+    "2": "7",
+    "3": "6",
+    "4": "5",
+    "5": "3",
+    "6": "2",
+    "7": "1"
+  },
+  "extensions": {
+    "src": "%(src)s",
+    "dst": "%(dst)s",
+    "spt": "%(spt)s",
+    "dpt": "%(dpt)s",
+    "proto": "%(protocol)s",
+    "cs1Label": "rawEvent",
+    "cs1": "%(raw_kv)s"
+  }
+}

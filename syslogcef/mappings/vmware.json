@@ -1,0 +1,12 @@
+{
+  "deviceVendor": "VMware",
+  "deviceProduct": "ESXi",
+  "deviceVersion": "auto",
+  "eventClassId": "vmware.%(event_code)s",
+  "name": "%(message_short)s",
+  "extensions": {
+    "dvc": "%(host)s",
+    "cs1Label": "rawEvent",
+    "cs1": "%(raw)s"
+  }
+}

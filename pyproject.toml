@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "syslogcef"
+version = "0.1.0"
+description = "Convert RFC3164/RFC5424 syslog lines into ArcSight CEF"
+authors = [{name = "SyslogCEF Maintainers"}]
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: System :: Logging",
+]
+keywords = ["syslog", "cef", "logging", "security"]
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+  "pytest>=7",
+]
+
+[project.scripts]
+syslogcef = "syslogcef.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "."}
+packages = ["syslogcef", "syslogcef.mappings"]
+
+[tool.setuptools.package-data]
+syslogcef = ["mappings/*.json"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+pythonpath = ["."]

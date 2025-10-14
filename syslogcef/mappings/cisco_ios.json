@@ -1,0 +1,13 @@
+{
+  "deviceVendor": "Cisco",
+  "deviceProduct": "IOS",
+  "deviceVersion": "auto",
+  "eventClassId": "ios.%(event_code)s",
+  "name": "%(message_short)s",
+  "extensions": {
+    "src": "%(src)s",
+    "dst": "%(dst)s",
+    "cs1Label": "rawEvent",
+    "cs1": "%(raw)s"
+  }
+}
