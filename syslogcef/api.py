@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, Mapping, MutableMapping, Optional
 
 from .parsers import ParsedEvent, autodetect_and_parse
 from .normalizer import NormalizedEvent, normalize
-from .mappings import CISCO_ASA, CISCO_IOS, F5, LINUX, VMWARE
+from .mappings import CISCO_ASA, CISCO_IOS, F5, FORTINET, LINUX, SOPHOS, VMWARE
 from .cef import CEFEvent, build_cef
 
 logger = logging.getLogger(__name__)
@@ -111,6 +111,10 @@ def _guess_mapping(event: NormalizedEvent) -> Mapping[str, Any]:
         return CISCO_IOS
     if "BIG-IP" in msg_upper or "F5" in app_upper:
         return F5
+    if "devname" in event.kv or "logid" in event.kv:
+        return FORTINET
+    if "log_id" in event.kv or event.kv.get("device") == "SFW":
+        return SOPHOS
     if "VMWARE" in msg_upper or "ESXI" in msg_upper or "VMWARE" in app_upper:
         return VMWARE
     if event_code:

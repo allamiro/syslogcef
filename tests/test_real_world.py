@@ -61,17 +61,27 @@ def test_ftd_event_code_routes_to_asa_mapping():
     assert fields(cef)[4] == "asa.FTD-6-305012"
 
 
-def test_pri_survives_raw_fallback():
-    # Sophos XG style: PRI prefix followed by key=value pairs, no syslog header.
+def test_pri_survives_sophos_kv_line():
+    # Sophos XG style: PRI prefix followed by key=value pairs, no syslog
+    # header. Parsed by the dedicated kv parser; PRI is preserved.
     line = '<30>device="SFW" date=2020-05-18 time=14:38:48 timezone="CEST" device_name="XG230" log_type="Anti-Spam" src_ip="" dst_ip=""'
     ev = parse_syslog(line)
-    assert ev.source_hint == "unknown"
+    assert ev.source_hint == "kv"
     assert ev.pri == 30
     assert ev.facility == 3
     assert ev.severity == 6
     assert not ev.msg.startswith("<30>")
     cef = convert_line(line)
     assert fields(cef)[6] == "2"
+
+
+def test_pri_survives_raw_fallback():
+    line = "<30>completely nonstandard payload without structure"
+    ev = parse_syslog(line)
+    assert ev.source_hint == "unknown"
+    assert ev.pri == 30
+    assert ev.severity == 6
+    assert not ev.msg.startswith("<30>")
 
 
 def test_classic_rfc3164_without_year_still_parses():

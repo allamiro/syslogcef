@@ -1,0 +1,18 @@
+{
+  "deviceVendor": "Sophos",
+  "deviceProduct": "XG Firewall",
+  "deviceVersion": "auto",
+  "eventClassId": "sophos.%(log_id)s",
+  "name": "%(message_short)s",
+  "extensions": {
+    "dvchost": "%(device_name)s",
+    "src": "%(src_ip)s",
+    "dst": "%(dst_ip)s",
+    "spt": "%(src_port)s",
+    "dpt": "%(dst_port)s",
+    "suser": "%(user_name)s",
+    "cat": "%(log_type)s",
+    "cs1Label": "rawEvent",
+    "cs1": "%(raw)s"
+  }
+}

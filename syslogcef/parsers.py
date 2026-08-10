@@ -8,11 +8,13 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Iterable, Mapping, MutableMapping, Optional, Tuple
 
 from .utils import (
+    KEY_VALUE_RE,
     JournalJSONMapping,
     convert_pri,
     guess_hostname,
     month_abbr_to_int,
     parse_iso8601,
+    parse_key_value_pairs,
     sanitize_message,
 )
 
@@ -83,6 +85,44 @@ JOURNALCTL_ISO_RE = re.compile(
 )
 
 KV_SPLIT_RE = re.compile(r"\s+|,|")
+
+# Native Cisco console/buffer format: optional sequence number, optional
+# clock-state marker (* = unsynced, . = drifting), timestamp with optional
+# year/milliseconds/timezone, then the %CODE message.
+CISCO_SEQ_RE = re.compile(
+    r"^(?:<(?P<pri>\d+)>)?"
+    r"(?:(?P<seq>\d+):\s+)?"
+    r"[*.]?"
+    r"(?P<month>[A-Z][a-z]{2})\s+"
+    r"(?P<day>\d{1,2})\s+"
+    r"(?:(?P<year>\d{4})\s+)?"
+    r"(?P<time>\d{2}:\d{2}:\d{2})(?:\.\d+)?"
+    r"(?:\s+[A-Z]{3,4})?:\s+"
+    r"(?P<msg>%[A-Z].*)$"
+)
+
+# ISO timestamp syslog without RFC5424 framing: <PRI>ISO host [tag[pid]:] msg
+ISO_SYSLOG_RE = re.compile(
+    r"^(?:<(?P<pri>\d+)>)?"
+    r"(?P<timestamp>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\s+"
+    r"(?P<host>[^\s]+?):?\s+"
+    r"(?:(?P<tag>[\w\-/\.]+)(?:\[(?P<pid>[^\]]+)\])?:\s?)?"
+    r"(?P<msg>.*)$"
+)
+
+# Key=value stream format (Fortinet FortiGate, Sophos XG, ...): the whole
+# line is key=value pairs, optionally preceded by a PRI. Detection is done
+# in _looks_like_kv_line (linear scan) rather than a repeated-group regex,
+# which backtracks catastrophically on long non-matching lines.
+PRI_PREFIX_RE = re.compile(r"^<(?P<pri>\d{1,3})>")
+
+
+def _looks_like_kv_line(body: str) -> bool:
+    matches = list(KEY_VALUE_RE.finditer(body))
+    if len(matches) < 3:
+        return False
+    covered = sum(m.end() - m.start() for m in matches)
+    return covered >= 0.7 * len(body.strip())
 
 
 def _infer_timestamp(month: int, day: int, time_str: str, *, now: Optional[datetime]) -> datetime:
@@ -320,6 +360,115 @@ def parse_journalctl_iso(line: str) -> ParsedEvent | None:
     )
 
 
+def parse_cisco_seq(line: str, *, now: Optional[datetime]) -> ParsedEvent | None:
+    match = CISCO_SEQ_RE.match(line)
+    if not match:
+        return None
+    gd = match.groupdict()
+    pri = int(gd["pri"]) if gd.get("pri") else None
+    facility, severity = convert_pri(pri)
+    month = month_abbr_to_int(gd["month"])
+    hour, minute, second = map(int, gd["time"].split(":"))
+    if gd.get("year"):
+        ts = datetime(int(gd["year"]), month, int(gd["day"]), hour, minute, second, tzinfo=timezone.utc)
+    else:
+        ts = _infer_timestamp(month, int(gd["day"]), gd["time"], now=now)
+    sd = {"cisco.sequence": gd["seq"]} if gd.get("seq") else {}
+    return ParsedEvent(
+        pri=pri,
+        facility=facility,
+        severity=severity,
+        ts=ts,
+        ts_orig=f"{gd['month']} {gd['day']} {gd['time']}",
+        host=None,
+        app=None,
+        pid=None,
+        msgid=None,
+        sd=sd,
+        msg=gd.get("msg", ""),
+        raw=line,
+        source_hint="cisco",
+    )
+
+
+def parse_iso_syslog(line: str) -> ParsedEvent | None:
+    match = ISO_SYSLOG_RE.match(line)
+    if not match:
+        return None
+    gd = match.groupdict()
+    pri = int(gd["pri"]) if gd.get("pri") else None
+    facility, severity = convert_pri(pri)
+    try:
+        ts = parse_iso8601(gd["timestamp"])
+    except ValueError:
+        return None
+    return ParsedEvent(
+        pri=pri,
+        facility=facility,
+        severity=severity,
+        ts=ts,
+        ts_orig=gd["timestamp"],
+        host=gd.get("host"),
+        app=gd.get("tag"),
+        pid=gd.get("pid"),
+        msgid=None,
+        sd={},
+        msg=gd.get("msg", ""),
+        raw=line,
+        source_hint="iso_syslog",
+    )
+
+
+def parse_kv_stream(line: str) -> ParsedEvent | None:
+    pri = None
+    body = line
+    pri_match = PRI_PREFIX_RE.match(line)
+    if pri_match:
+        pri = int(pri_match.group("pri"))
+        body = line[pri_match.end():]
+    if not _looks_like_kv_line(body):
+        return None
+    facility, severity = convert_pri(pri)
+    pairs = parse_key_value_pairs(body)
+    if len(pairs) < 3:
+        return None
+
+    ts = None
+    if pairs.get("date") and pairs.get("time"):
+        try:
+            ts = parse_iso8601(f"{pairs['date']}T{pairs['time']}")
+        except ValueError:
+            ts = None
+    elif pairs.get("eventtime", "").isdigit():
+        try:
+            ts = parse_iso8601(pairs["eventtime"][:16])
+        except ValueError:
+            ts = None
+
+    host = (
+        pairs.get("devname")
+        or pairs.get("device_name")
+        or pairs.get("dvchost")
+        or pairs.get("devid")
+        or pairs.get("device_id")
+    )
+    return ParsedEvent(
+        pri=pri,
+        facility=facility,
+        severity=severity,
+        ts=ts,
+        ts_orig=f"{pairs.get('date', '')} {pairs.get('time', '')}".strip(),
+        host=host,
+        app=pairs.get("type") or pairs.get("log_type"),
+        pid=None,
+        msgid=pairs.get("logid") or pairs.get("log_id"),
+        sd={},
+        msg=body.strip(),
+        raw=line,
+        source_hint="kv",
+    )
+
+
 PARSERS = {
     "rfc3164": parse_rfc3164,
     "rfc5424": parse_rfc5424,
@@ -328,6 +477,9 @@ PARSERS = {
     "journald_json": parse_journalctl_json,
     "journald_short": parse_journalctl_short,
     "journald_iso": parse_journalctl_iso,
+    "cisco_seq": parse_cisco_seq,
+    "iso_syslog": parse_iso_syslog,
+    "kv": parse_kv_stream,
 }
 
 
@@ -338,6 +490,9 @@ def autodetect_and_parse(line: str, *, mode: Optional[str] = None, now: Optional
         ("rfc5424", lambda s: s.startswith("<") and ">" in s[:10]),
         ("rsyslog_file", lambda s: bool(RSYSLOG_FILE_RE.match(s))),
         ("journald_iso", lambda s: bool(JOURNALCTL_ISO_RE.match(s))),
+        ("iso_syslog", lambda s: bool(ISO_SYSLOG_RE.match(s))),
+        ("kv", lambda s: "=" in s[:80]),
+        ("cisco_seq", lambda s: bool(CISCO_SEQ_RE.match(s))),
         ("journald_short", lambda s: bool(JOURNALCTL_SHORT_RE.match(s))),
         ("rfc3164", lambda s: bool(RFC3164_RE.match(s))),
     ]
@@ -361,6 +516,18 @@ def autodetect_and_parse(line: str, *, mode: Optional[str] = None, now: Optional
         except Exception:
             logger.exception("Parser %s failed for line", key)
             continue
+
+    # Nothing known matched: let the adaptive detector analyze the line and
+    # synthesize a reusable pattern before giving up.
+    from .adaptive import adaptive_parse
+
+    try:
+        adaptive_event = adaptive_parse(line, now=now)
+    except Exception:
+        logger.exception("Adaptive parser failed for line")
+        adaptive_event = None
+    if adaptive_event is not None:
+        return adaptive_event
 
     # Fallback to raw message if nothing matches. A leading <PRI> is still
     # honored so facility/severity survive for non-standard formats.

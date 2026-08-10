@@ -9,7 +9,9 @@ __all__ = [
     "CISCO_ASA",
     "CISCO_IOS",
     "F5",
+    "FORTINET",
     "LINUX",
+    "SOPHOS",
     "VMWARE",
 ]
 
@@ -22,7 +24,9 @@ def _load(name: str) -> Mapping[str, Any]:
 CISCO_ASA = _load("cisco_asa")
 CISCO_IOS = _load("cisco_ios")
 F5 = _load("f5")
+FORTINET = _load("fortinet")
 LINUX = _load("linux")
+SOPHOS = _load("sophos")
 VMWARE = _load("vmware")
 
 
@@ -31,7 +35,9 @@ def load_mapping(name: str) -> Mapping[str, Any]:
         "cisco_asa": CISCO_ASA,
         "cisco_ios": CISCO_IOS,
         "f5": F5,
+        "fortinet": FORTINET,
         "linux": LINUX,
+        "sophos": SOPHOS,
         "vmware": VMWARE,
     }
     try:

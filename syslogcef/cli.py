@@ -102,7 +102,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("paths", nargs="*", type=Path, help="Input files (defaults to stdin)")
     parser.add_argument("-o", "--output", type=Path, help="Output file")
     parser.add_argument("-a", "--append", action="store_true", help="Append to --output instead of truncating it")
-    parser.add_argument("--mode", choices=["rfc3164", "rfc5424", "rsyslog_json", "rsyslog_file", "journald_json", "journald_short", "journald_iso"], help="Parser mode override")
+    parser.add_argument("--mode", choices=["rfc3164", "rfc5424", "rsyslog_json", "rsyslog_file", "journald_json", "journald_short", "journald_iso", "cisco_seq", "iso_syslog", "kv"], help="Parser mode override")
     parser.add_argument("--mapping", type=str, help="Mapping JSON file")
     parser.add_argument("--tail", action="store_true", help="Follow file like tail -f")
     parser.add_argument("--multiprocess", action="store_true", help="Process lines using a process pool")

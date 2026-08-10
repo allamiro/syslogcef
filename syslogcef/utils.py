@@ -26,7 +26,18 @@ MONTHS = {
     "Dec": 12,
 }
 
-KEY_VALUE_RE = re.compile(r"(?P<key>[A-Za-z0-9_.-]+)=(?P<value>\S+)")
+KEY_VALUE_RE = re.compile(r"(?P<key>[A-Za-z0-9_.-]+)=(?P<value>\"[^\"]*\"|'[^']*'|\S+)")
+
+SEVERITY_WORDS = {
+    "emergency": 0, "emerg": 0, "panic": 0,
+    "alert": 1,
+    "critical": 2, "crit": 2,
+    "error": 3, "err": 3,
+    "warning": 4, "warn": 4,
+    "notice": 5,
+    "information": 6, "informational": 6, "info": 6,
+    "debug": 7,
+}
 UTF8_REPLACEMENT_CHAR = "\uFFFD"
 
 
@@ -80,10 +91,14 @@ def parse_key_value_pairs(msg: str) -> Dict[str, str]:
     for match in KEY_VALUE_RE.finditer(msg):
         key = match.group("key")
         value = match.group("value")
-        if value.startswith(('"', "'")) and value.endswith(('"', "'")):
+        if len(value) >= 2 and value[0] in "\"'" and value[-1] == value[0]:
             value = value[1:-1]
         pairs[key] = value
     return pairs
+
+
+def severity_from_word(word: str) -> Optional[int]:
+    return SEVERITY_WORDS.get(word.strip().lower())
 
 
 def guess_hostname() -> str:
