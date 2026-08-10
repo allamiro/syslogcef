@@ -57,6 +57,22 @@ The GitHub releases page also provides, for every version:
   with Python 3.9+: `chmod +x syslogcef-X.Y.Z.pyz && ./syslogcef-X.Y.Z.pyz`.
 - A source zip and sdist/wheel files.
 
+A multi-arch (amd64/arm64) container image is published to GitHub
+Container Registry on each release:
+
+```bash
+docker run -i ghcr.io/allamiro/syslogcef < /var/log/syslog
+```
+
+Fedora, RHEL/Alma/Rocky 9 and 10, and CentOS Stream users can install
+from the [COPR repository](https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/),
+which rebuilds automatically from every commit:
+
+```bash
+sudo dnf copr enable allamiro/syslogcef
+sudo dnf install syslogcef
+```
+
 Every asset ships with a detached GPG signature (`.asc`) and is listed in
 a signed `SHA256SUMS` file; RPMs additionally carry embedded `rpmsign`
 signatures. The public key is committed at
