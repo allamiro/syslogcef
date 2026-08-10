@@ -109,22 +109,154 @@ jobs:
           name: rpm-dist
           path: rpms/*
 
+  build-standalone:
+    name: Build zipapp, Debian package, and source zip
+    runs-on: ubuntu-latest
+    env:
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build standalone zipapp
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          pip install . --target build/zipapp --no-compile
+          rm -rf build/zipapp/bin build/zipapp/*.dist-info
+          mkdir -p out
+          python -m zipapp build/zipapp \
+            -m "syslogcef.cli:main" \
+            -p "/usr/bin/env python3" \
+            -c -o "out/syslogcef-${VERSION}.pyz"
+          echo "conversion smoke test:" \
+            && echo '<166>Jan  1 12:34:56 fw1 %ASA-6-302013: Built inbound src=1.2.3.4' \
+              | "out/syslogcef-${VERSION}.pyz"
+
+      - name: Build Debian package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          bash packaging/debian/build-deb.sh "$VERSION" "out/syslogcef-${VERSION}.pyz" out
+          dpkg-deb --info "out/syslogcef_${VERSION}-1_all.deb"
+
+      - name: Build source zip
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          git archive --format=zip --prefix="syslogcef-${VERSION}/" \
+            -o "out/syslogcef-${VERSION}-source.zip" HEAD
+
+      - name: Sign artifacts
+        if: env.GPG_PRIVATE_KEY != ''
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          for artifact in out/*.pyz out/*.deb out/*.zip; do
+            gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$GPG_PASSPHRASE" \
+              --detach-sign --armor "$artifact"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: standalone-dist
+          path: out/*
+
+  build-apk:
+    name: Build Alpine APK
+    runs-on: ubuntu-latest
+    container: alpine:3.21
+    env:
+      ABUILD_PRIVATE_KEY: ${{ secrets.ABUILD_PRIVATE_KEY }}
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+    steps:
+      - name: Install build tools
+        run: apk add --no-cache abuild build-base python3 py3-pip gnupg git
+
+      - uses: actions/checkout@v4
+
+      - name: Build APK
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          # abuild refuses to run as root
+          adduser -D builder
+          addgroup builder abuild
+
+          # Signing key: use the repository secret, or an ephemeral key when absent
+          mkdir -p /home/builder/.abuild
+          if [ -n "$ABUILD_PRIVATE_KEY" ]; then
+            printf '%s\n' "$ABUILD_PRIVATE_KEY" > /home/builder/.abuild/syslogcef.rsa
+            cp packaging/apk/syslogcef.rsa.pub /home/builder/.abuild/syslogcef.rsa.pub
+          else
+            su builder -c "abuild-keygen -an" \
+              && mv /home/builder/.abuild/*.rsa /home/builder/.abuild/syslogcef.rsa \
+              && mv /home/builder/.abuild/*.rsa.pub /home/builder/.abuild/syslogcef.rsa.pub
+          fi
+          echo 'PACKAGER_PRIVKEY="/home/builder/.abuild/syslogcef.rsa"' > /home/builder/.abuild/abuild.conf
+          cp /home/builder/.abuild/syslogcef.rsa.pub /etc/apk/keys/
+
+          # Build the zipapp that the APK ships
+          pip install . --target build/zipapp --no-compile --break-system-packages
+          rm -rf build/zipapp/bin build/zipapp/*.dist-info
+          python3 -m zipapp build/zipapp \
+            -m "syslogcef.cli:main" \
+            -p "/usr/bin/env python3" \
+            -c -o "packaging/apk/syslogcef-${VERSION}.pyz"
+
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" packaging/apk/APKBUILD
+          chown -R builder packaging/apk /home/builder/.abuild
+          su builder -c "cd packaging/apk && abuild checksum && abuild -r"
+
+          mkdir -p out
+          cp /home/builder/packages/packaging/noarch/syslogcef-*.apk out/
+
+      - name: Sign APK with GPG (detached)
+        if: env.GPG_PRIVATE_KEY != ''
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          for artifact in out/*.apk; do
+            gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$GPG_PASSPHRASE" \
+              --detach-sign --armor "$artifact"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-dist
+          path: out/*
+
   github-release:
     name: Create GitHub release
-    needs: [build-python, build-rpm]
+    needs: [build-python, build-rpm, build-standalone, build-apk]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
 
-      - name: Generate checksums
+      - name: Generate and sign checksums
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           cd artifacts
-          sha256sum *.tar.gz *.whl *.rpm > SHA256SUMS
+          sha256sum *.tar.gz *.whl *.rpm *.deb *.pyz *.zip *.apk > SHA256SUMS
+          if [ -n "$GPG_PRIVATE_KEY" ]; then
+            echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+            gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$GPG_PASSPHRASE" \
+              --detach-sign --armor SHA256SUMS
+          fi
 
       - name: Create release
         env:

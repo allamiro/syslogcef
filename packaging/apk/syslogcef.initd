@@ -1,0 +1,16 @@
+#!/sbin/openrc-run
+description="syslog to CEF converter"
+
+command="/usr/bin/syslogcef"
+command_args="${INPUT_FILE} --tail --append --output ${OUTPUT_FILE} ${EXTRA_ARGS}"
+command_background="yes"
+pidfile="/run/${RC_SVCNAME}.pid"
+
+depend() {
+	need localmount
+	after net
+}
+
+start_pre() {
+	checkpath -d -m 0755 "$(dirname "${OUTPUT_FILE}")"
+}

@@ -7,11 +7,18 @@ which:
 1. Runs the test suite, then builds the sdist and wheel.
 2. Builds a noarch RPM (with the systemd service and configuration file)
    in a Fedora container from [packaging/rpm/syslogcef.spec](packaging/rpm/syslogcef.spec).
-3. GPG-signs all artifacts when signing secrets are configured (detached
-   `.asc` signatures for the sdist/wheel, `rpmsign` for the RPMs).
-4. Creates a GitHub Release with generated notes, the artifacts, and a
-   `SHA256SUMS` file.
-5. Publishes the sdist and wheel to PyPI via trusted publishing.
+3. Builds a standalone executable zipapp (`syslogcef-X.Y.Z.pyz`), a
+   Debian package via [packaging/debian/build-deb.sh](packaging/debian/build-deb.sh),
+   and a source zip from `git archive`.
+4. Builds an Alpine APK with an OpenRC service in an Alpine container
+   from [packaging/apk/APKBUILD](packaging/apk/APKBUILD), signed with the
+   abuild RSA key (`ABUILD_PRIVATE_KEY` secret; public key committed at
+   packaging/apk/syslogcef.rsa.pub).
+5. GPG-signs all artifacts when signing secrets are configured (detached
+   `.asc` signatures for everything, `rpmsign` for the RPMs) and signs
+   the `SHA256SUMS` file.
+6. Creates a GitHub Release with generated notes and all of the above.
+7. Publishes the sdist and wheel to PyPI.
 
 ## Cutting a Release
 

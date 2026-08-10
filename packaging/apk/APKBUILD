@@ -1,0 +1,17 @@
+# Maintainer: Tamir Suliman <allamiro@gmail.com>
+pkgname=syslogcef
+pkgver=0.0.0
+pkgrel=0
+pkgdesc="Convert syslog events to ArcSight CEF"
+url="https://github.com/allamiro/syslogcef"
+arch="noarch"
+license="MIT"
+depends="python3"
+options="!check"
+source="syslogcef-$pkgver.pyz syslogcef.initd syslogcef.confd"
+
+package() {
+	install -Dm755 "$srcdir"/syslogcef-$pkgver.pyz "$pkgdir"/usr/bin/syslogcef
+	install -Dm755 "$srcdir"/syslogcef.initd "$pkgdir"/etc/init.d/syslogcef
+	install -Dm644 "$srcdir"/syslogcef.confd "$pkgdir"/etc/conf.d/syslogcef
+}

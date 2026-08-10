@@ -1,0 +1,12 @@
+# Configuration for the syslogcef OpenRC service.
+# The service runs:
+#   syslogcef $INPUT_FILE --tail --append --output $OUTPUT_FILE $EXTRA_ARGS
+
+# File to follow for new syslog lines.
+INPUT_FILE=/var/log/messages
+
+# File that converted CEF events are appended to.
+OUTPUT_FILE=/var/log/syslogcef/events.cef
+
+# Extra arguments, for example: --mode rfc3164 --mapping /etc/syslogcef/mapping.json
+EXTRA_ARGS=""
