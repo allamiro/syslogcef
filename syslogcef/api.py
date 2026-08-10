@@ -103,8 +103,9 @@ def convert_line(
 def _guess_mapping(event: NormalizedEvent) -> Mapping[str, Any]:
     msg_upper = event.msg.upper()
     app_upper = (event.app or "").upper()
+    event_code = event.kv.get("event_code", "")
 
-    if "%ASA-" in msg_upper or "ASA" in app_upper:
+    if "%ASA-" in msg_upper or "ASA" in app_upper or event_code.startswith(("ASA-", "FTD-")):
         return CISCO_ASA
     if "IOS" in app_upper or "%IOS-" in msg_upper:
         return CISCO_IOS
@@ -112,6 +113,9 @@ def _guess_mapping(event: NormalizedEvent) -> Mapping[str, Any]:
         return F5
     if "VMWARE" in msg_upper or "ESXI" in msg_upper or "VMWARE" in app_upper:
         return VMWARE
+    if event_code:
+        # Other %FAC-SEV-MNEMONIC codes are Cisco IOS style.
+        return CISCO_IOS
     return LINUX
 
 
