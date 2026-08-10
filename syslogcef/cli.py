@@ -74,8 +74,8 @@ def follow_files(
             handle.close()
 
 
-def _convert_line_mp(line: str, mode: Optional[str], mapping: Optional[str]) -> str:
-    return convert_line(line, mode=mode, mapping=mapping)
+def _convert_line_mp(line: str, mode: Optional[str], mapping: Optional[str], validate: bool = False, strict: bool = False) -> str:
+    return convert_line(line, mode=mode, mapping=mapping, validate=validate, strict=strict)
 
 
 def process_lines(
@@ -85,16 +85,18 @@ def process_lines(
     mapping: Optional[str],
     use_multiprocessing: bool,
     pool_size: Optional[int],
+    validate: bool = False,
+    strict: bool = False,
 ) -> Iterator[str]:
     if use_multiprocessing:
         size = pool_size or max(1, cpu_count() - 1)
         with Pool(size) as pool:
-            worker = partial(_convert_line_mp, mode=mode, mapping=mapping)
+            worker = partial(_convert_line_mp, mode=mode, mapping=mapping, validate=validate, strict=strict)
             for cef in pool.imap(worker, lines):
                 yield cef
     else:
         for line in lines:
-            yield convert_line(line, mode=mode, mapping=mapping)
+            yield convert_line(line, mode=mode, mapping=mapping, validate=validate, strict=strict)
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -110,6 +112,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--eps", type=float, help="Rate-limit --send to at most this many events per second")
     parser.add_argument("--multiprocess", action="store_true", help="Process lines using a process pool")
     parser.add_argument("--pool-size", type=int, help="Number of worker processes for --multiprocess")
+    parser.add_argument("--validate", action="store_true", help="Validate CEF extensions against the ArcSight dictionary; violations are logged as warnings")
+    parser.add_argument("--strict", action="store_true", help="Like --validate, but exit with an error on type/length violations")
     parser.add_argument("--log-level", default="WARNING", help="Logging level")
 
     args = parser.parse_args(argv)
@@ -126,11 +130,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         except ValueError as exc:
             parser.error(str(exc))
         lines = listen_lines(proto, host, port)
-        outputs = process_lines(lines, mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size)
+        outputs = process_lines(lines, mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict)
     elif args.tail and args.paths:
-        outputs = process_lines(follow_files(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size)
+        outputs = process_lines(follow_files(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict)
     else:
-        outputs = process_lines(iter_lines_from_sources(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size)
+        outputs = process_lines(iter_lines_from_sources(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict)
 
     sender = None
     if args.send:
@@ -140,6 +144,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             sender = create_sender(args.send, eps=args.eps)
         except (ValueError, RuntimeError) as exc:
             parser.error(str(exc))
+
+    from .validation import CEFValidationError
 
     try:
         if args.output:
@@ -156,6 +162,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         else:
             for cef in outputs:
                 print(cef)
+    except CEFValidationError as exc:
+        print(f"syslogcef: strict validation failed: {exc}", file=sys.stderr)
+        return 1
     finally:
         if sender:
             sender.close()
