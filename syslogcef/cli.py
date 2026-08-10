@@ -38,6 +38,42 @@ def tail_file(path: Path, *, follow: bool = False) -> Iterator[str]:
             yield line.rstrip("\n")
 
 
+def follow_files(
+    paths: Iterable[Path],
+    *,
+    poll_interval: float = 0.5,
+    max_idle_polls: Optional[int] = None,
+) -> Iterator[str]:
+    """Tail several files at once, round-robin, yielding lines as they appear.
+
+    ``max_idle_polls`` bounds how many consecutive empty polls are allowed
+    before the generator stops; ``None`` follows forever.
+    """
+
+    handles = [path.open("r", encoding="utf-8", errors="replace") for path in paths]
+    idle_polls = 0
+    try:
+        while True:
+            got_line = False
+            for handle in handles:
+                while True:
+                    line = handle.readline()
+                    if not line:
+                        break
+                    got_line = True
+                    yield line.rstrip("\n")
+            if got_line:
+                idle_polls = 0
+                continue
+            idle_polls += 1
+            if max_idle_polls is not None and idle_polls >= max_idle_polls:
+                return
+            time.sleep(poll_interval)
+    finally:
+        for handle in handles:
+            handle.close()
+
+
 def _convert_line_mp(line: str, mode: Optional[str], mapping: Optional[str]) -> str:
     return convert_line(line, mode=mode, mapping=mapping)
 
@@ -79,11 +115,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     outputs: Iterator[str]
     if args.tail and args.paths:
-        def tail_stream() -> Iterator[str]:
-            for path in args.paths:
-                yield from tail_file(path, follow=True)
-
-        outputs = process_lines(tail_stream(), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size)
+        outputs = process_lines(follow_files(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size)
     else:
         outputs = process_lines(iter_lines_from_sources(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size)
 
