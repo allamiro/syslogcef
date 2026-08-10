@@ -1,0 +1,107 @@
+.TH SYSLOGCEF 1 "August 2026" "syslogcef 0.1.0" "User Commands"
+.SH NAME
+syslogcef \- convert syslog events to ArcSight Common Event Format (CEF)
+.SH SYNOPSIS
+.B syslogcef
+[\fIOPTIONS\fR] [\fIPATHS\fR...]
+.SH DESCRIPTION
+.B syslogcef
+converts syslog events into ArcSight Common Event Format (CEF) for
+consumption by SIEM platforms. It automatically detects and parses
+RFC3164 (BSD), RFC5424 (including structured data), rsyslog JSON and
+file formats, and systemd journal exports (JSON, short, and ISO
+formats).
+.PP
+Input is read from the given \fIPATHS\fR, or from standard input when no
+paths are given. One CEF record is emitted per input line. Unparseable
+lines never abort the stream; they fall back to a raw-message event.
+.PP
+Vendor/product mappings for Cisco ASA, Cisco IOS, F5 BIG-IP, generic
+Linux, and VMware ESXi are bundled and selected automatically from
+message content; custom mappings can be supplied as JSON files.
+Log content is treated as untrusted input: CEF header and extension
+values are escaped so crafted messages cannot forge header fields or
+split records.
+.SH OPTIONS
+.TP
+.BR \-o ", " \-\-output " \fIFILE\fR"
+Write CEF lines to \fIFILE\fR instead of standard output.
+.TP
+.BR \-a ", " \-\-append
+Append to the output file instead of truncating it.
+.TP
+.BR \-\-mode " \fIMODE\fR"
+Force a specific parser instead of auto-detection. One of
+.BR rfc3164 ,
+.BR rfc5424 ,
+.BR rsyslog_json ,
+.BR rsyslog_file ,
+.BR journald_json ,
+.BR journald_short ,
+.BR journald_iso .
+.TP
+.BR \-\-mapping " \fIFILE\fR"
+Use the mapping JSON file \fIFILE\fR. When omitted, a bundled mapping is
+selected automatically from message content.
+.TP
+.B \-\-tail
+Follow the input files like
+.BR "tail \-f" ;
+all given files are tailed concurrently.
+.TP
+.B \-\-multiprocess
+Convert lines using a process pool.
+.TP
+.BR \-\-pool\-size " \fIN\fR"
+Number of worker processes for
+.BR \-\-multiprocess
+(default: CPU count minus one).
+.TP
+.BR \-\-log\-level " \fILEVEL\fR"
+Python logging level (default
+.BR WARNING ).
+.SH EXAMPLES
+Convert a log file to CEF on standard output:
+.PP
+.nf
+.RS
+syslogcef < /var/log/syslog
+.RE
+.fi
+.PP
+Follow two files in real time and append CEF to an output file:
+.PP
+.nf
+.RS
+syslogcef /var/log/asa.log /var/log/messages \-\-tail \-\-append \-o events.cef
+.RE
+.fi
+.PP
+Force the Cisco ASA mapping:
+.PP
+.nf
+.RS
+syslogcef asa.log \-\-mapping /usr/share/syslogcef/mappings/cisco_asa.json
+.RE
+.fi
+.SH FILES
+.TP
+.I /etc/syslogcef/syslogcef.conf
+Configuration for the system service: input file, output file, and
+extra arguments.
+.TP
+.I syslogcef.service
+systemd unit (RPM and Debian packages) that follows the configured
+input and appends CEF to the configured output. On Alpine the
+equivalent OpenRC service is configured via
+.IR /etc/conf.d/syslogcef .
+.SH EXIT STATUS
+.B syslogcef
+exits 0 on success and non-zero if input files cannot be read or
+arguments are invalid.
+.SH SEE ALSO
+Project homepage and issue tracker:
+.UR https://github.com/allamiro/syslogcef
+.UE
+.SH AUTHOR
+Tamir Suliman <allamiro@gmail.com>

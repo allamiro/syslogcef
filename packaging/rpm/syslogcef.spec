@@ -8,6 +8,7 @@ URL:            https://github.com/allamiro/syslogcef
 Source0:        %{pypi_source syslog2cef}
 Source1:        syslogcef.service
 Source2:        syslogcef.conf
+Source3:        syslogcef.1
 
 BuildArch:      noarch
 BuildRequires:  python3-devel
@@ -36,6 +37,7 @@ that follows a configured log file and appends CEF output.
 
 install -D -m 0644 %{SOURCE1} %{buildroot}%{_unitdir}/syslogcef.service
 install -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/syslogcef/syslogcef.conf
+install -D -m 0644 %{SOURCE3} %{buildroot}%{_mandir}/man1/syslogcef.1
 
 %check
 %pyproject_check_import syslogcef
@@ -53,6 +55,7 @@ install -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/syslogcef/syslogcef.con
 %license LICENSE
 %doc README.md
 %{_bindir}/syslogcef
+%{_mandir}/man1/syslogcef.1*
 %{_unitdir}/syslogcef.service
 %dir %{_sysconfdir}/syslogcef
 %config(noreplace) %{_sysconfdir}/syslogcef/syslogcef.conf
