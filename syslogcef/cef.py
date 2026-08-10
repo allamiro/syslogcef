@@ -87,6 +87,9 @@ class MappingResolver:
         except KeyError as exc:
             logger.debug("Missing key %s for template %s", exc, template)
             return ""
+        except (ValueError, TypeError) as exc:
+            logger.warning("Invalid template %r: %s", template, exc)
+            return ""
 
 
 def build_cef(event: NormalizedEvent, mapping: Mapping[str, Any]) -> CEFEvent:

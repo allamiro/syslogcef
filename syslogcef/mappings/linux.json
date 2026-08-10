@@ -2,7 +2,7 @@
   "deviceVendor": "Linux",
   "deviceProduct": "Syslog",
   "deviceVersion": "auto",
-  "eventClassId": "linux.%{msgid}",
+  "eventClassId": "linux.syslog",
   "name": "%(message_short)s",
   "extensions": {
     "dhost": "%(host)s",
