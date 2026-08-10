@@ -105,6 +105,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--mode", choices=["rfc3164", "rfc5424", "rsyslog_json", "rsyslog_file", "journald_json", "journald_short", "journald_iso", "cisco_seq", "iso_syslog", "kv"], help="Parser mode override")
     parser.add_argument("--mapping", type=str, help="Mapping JSON file")
     parser.add_argument("--tail", action="store_true", help="Follow file like tail -f")
+    parser.add_argument("--listen", metavar="PROTO:PORT", help="Receive syslog over the network instead of reading files/stdin, e.g. udp:514, tcp:5514, or udp:10.0.0.5:514")
     parser.add_argument("--multiprocess", action="store_true", help="Process lines using a process pool")
     parser.add_argument("--pool-size", type=int, help="Number of worker processes for --multiprocess")
     parser.add_argument("--log-level", default="WARNING", help="Logging level")
@@ -115,7 +116,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     mapping = args.mapping
 
     outputs: Iterator[str]
-    if args.tail and args.paths:
+    if args.listen:
+        from .net import listen_lines, parse_endpoint
+
+        try:
+            proto, host, port = parse_endpoint(args.listen)
+        except ValueError as exc:
+            parser.error(str(exc))
+        lines = listen_lines(proto, host, port)
+        outputs = process_lines(lines, mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size)
+    elif args.tail and args.paths:
         outputs = process_lines(follow_files(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size)
     else:
         outputs = process_lines(iter_lines_from_sources(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size)
@@ -124,7 +134,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         with args.output.open("a" if args.append else "w", encoding="utf-8") as fp:
             for cef in outputs:
                 fp.write(cef + "\n")
-                if args.tail:
+                if args.tail or args.listen:
                     fp.flush()
     else:
         for cef in outputs:
