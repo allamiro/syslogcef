@@ -212,7 +212,7 @@ jobs:
           su builder -c "cd packaging/apk && abuild checksum && abuild -r"
 
           mkdir -p out
-          cp /home/builder/packages/packaging/noarch/syslogcef-*.apk out/
+          cp /home/builder/packages/packaging/*/syslogcef-*.apk out/
 
       - name: Sign APK with GPG (detached)
         if: env.GPG_PRIVATE_KEY != ''
@@ -291,7 +291,10 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true
 
       - name: Publish (trusted publishing)
         if: env.PYPI_API_TOKEN == ''
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
