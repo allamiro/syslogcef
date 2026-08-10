@@ -29,32 +29,44 @@ tag automatically at build time.)
 
 ## One-Time Setup
 
-### PyPI trusted publishing
+### PyPI publishing
 
-On pypi.org, under the project (or as a pending publisher for the first
-release): Publishing -> Add a new publisher with:
+The publish job supports two methods; it picks automatically:
 
-- Owner: `allamiro`
-- Repository: `syslogcef`
-- Workflow: `release.yml`
-- Environment: `pypi`
+1. `PYPI_API_TOKEN` repository secret, if present — an API token created
+   on pypi.org (Account settings -> API tokens). Simplest to start with.
+2. Trusted publishing (OIDC, no token), used when the secret is absent.
+   On pypi.org, under the project (or as a pending publisher for the
+   first release): Publishing -> Add a new publisher with owner
+   `allamiro`, repository `syslogcef`, workflow `release.yml`,
+   environment `pypi`.
 
-Also create a GitHub environment named `pypi` in the repository settings
-(Settings -> Environments). No API tokens are needed.
+The GitHub environment named `pypi` already exists in the repository
+settings. Once either method is configured, every new tag publishes
+automatically.
 
-### Artifact signing (optional)
+### Artifact signing
 
-Add two repository secrets (Settings -> Secrets and variables -> Actions):
+Signing is already configured: the `GPG_PRIVATE_KEY` and
+`GPG_PASSPHRASE` repository secrets hold the release signing key
 
-- `GPG_PRIVATE_KEY` — ASCII-armored private key
-  (`gpg --armor --export-secret-keys KEYID`)
-- `GPG_PASSPHRASE` — its passphrase
+    Tamir Suliman (syslogcef release signing) <allamiro@gmail.com>
+    Fingerprint: 3600 2DEB FA3B FAE6 8CE0  0D92 D86C D1CD 2AD1 9481
 
-When absent, the workflow skips signing and still releases unsigned
-artifacts with checksums. Publish the corresponding public key (for
-example as a repository file or on a keyserver) so users can verify:
+The workflow produces detached `.asc` signatures for the sdist and
+wheel and signs the RPMs with `rpmsign`. If the secrets are ever
+removed, the workflow skips signing and still releases unsigned
+artifacts with checksums.
+
+The public key is committed at
+[packaging/rpm/RPM-GPG-KEY-syslogcef](packaging/rpm/RPM-GPG-KEY-syslogcef).
+Users verify with:
 
 ```bash
+gpg --import RPM-GPG-KEY-syslogcef
 gpg --verify syslogcef-X.Y.Z.tar.gz.asc syslogcef-X.Y.Z.tar.gz
-rpm --import public-key.asc && rpm --checksig syslogcef-X.Y.Z-1.noarch.rpm
+rpm --import RPM-GPG-KEY-syslogcef && rpm --checksig syslogcef-X.Y.Z-1.noarch.rpm
 ```
+
+A backup of the private key and passphrase is stored offline by the
+maintainer; it is not in the repository.
