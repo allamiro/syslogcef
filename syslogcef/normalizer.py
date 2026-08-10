@@ -11,7 +11,7 @@ from .utils import ensure_tzaware, parse_key_value_pairs, sanitize_message
 logger = logging.getLogger(__name__)
 
 
-@dataclass(slots=True)
+@dataclass
 class NormalizedEvent(ParsedEvent):
     kv: Dict[str, str] = None
     extras: Dict[str, Any] = None
