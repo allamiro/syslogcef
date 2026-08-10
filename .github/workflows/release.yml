@@ -1,0 +1,146 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-python:
+    name: Build sdist and wheel
+    runs-on: ubuntu-latest
+    env:
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run tests
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[test]
+          pytest
+
+      - name: Build distributions
+        run: |
+          pip install build
+          python -m build
+
+      - name: Sign distributions
+        if: env.GPG_PRIVATE_KEY != ''
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          for artifact in dist/*.tar.gz dist/*.whl; do
+            gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$GPG_PASSPHRASE" \
+              --detach-sign --armor "$artifact"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: dist/*
+
+  build-rpm:
+    name: Build RPM
+    runs-on: ubuntu-latest
+    container: fedora:41
+    env:
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+    steps:
+      - name: Install build tools
+        run: |
+          dnf install -y rpm-build rpmdevtools rpm-sign gnupg2 git \
+            python3-devel python3-build python3-pip \
+            pyproject-rpm-macros systemd-rpm-macros
+
+      - uses: actions/checkout@v4
+
+      - name: Build sdist
+        run: python3 -m build --sdist
+
+      - name: Build RPM
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s/^Version:.*/Version:        ${VERSION}/" packaging/rpm/syslogcef.spec
+          rpmdev-setuptree
+          cp dist/syslogcef-*.tar.gz "$HOME/rpmbuild/SOURCES/"
+          cp packaging/rpm/syslogcef.service packaging/rpm/syslogcef.conf "$HOME/rpmbuild/SOURCES/"
+          rpmbuild -ba packaging/rpm/syslogcef.spec
+          mkdir -p rpms
+          cp "$HOME"/rpmbuild/RPMS/noarch/syslogcef-*.rpm rpms/
+          cp "$HOME"/rpmbuild/SRPMS/syslogcef-*.src.rpm rpms/
+
+      - name: Sign RPM
+        if: env.GPG_PRIVATE_KEY != ''
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          GPG_NAME="$(gpg --list-keys --with-colons | awk -F: '/^uid/ {print $10; exit}')"
+          cat >> "$HOME/.rpmmacros" <<EOF
+          %_signature gpg
+          %_gpg_name ${GPG_NAME}
+          %__gpg_sign_cmd %{__gpg} gpg --batch --pinentry-mode loopback --passphrase "${GPG_PASSPHRASE}" --no-armor --digest-algo sha256 -u "%{_gpg_name}" -sbo %{__signature_filename} %{__plaintext_filename}
+          EOF
+          rpmsign --addsign rpms/*.rpm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm-dist
+          path: rpms/*
+
+  github-release:
+    name: Create GitHub release
+    needs: [build-python, build-rpm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          sha256sum *.tar.gz *.whl *.rpm > SHA256SUMS
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            artifacts/*
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [build-python]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-dist
+          path: dist
+
+      - name: Remove non-distribution files
+        run: rm -f dist/*.asc
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
