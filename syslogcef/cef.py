@@ -56,7 +56,12 @@ class MappingResolver:
         header = {}
         for key in ["deviceVendor", "deviceProduct", "deviceVersion", "eventClassId", "name"]:
             template = self.mapping.get(key, DEFAULT_MAPPING[key])
-            header[key] = cef_escape_header(self._format(template, fields))
+            value = self._format(template, fields)
+            if not value:
+                # A template referencing missing fields must not leave an
+                # empty CEF header slot; fall back to the default template.
+                value = self._format(DEFAULT_MAPPING[key], fields)
+            header[key] = cef_escape_header(value)
         severity = self._resolve_severity(fields)
         header["severity"] = severity
         return header

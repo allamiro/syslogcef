@@ -111,9 +111,9 @@ def _guess_mapping(event: NormalizedEvent) -> Mapping[str, Any]:
         return CISCO_IOS
     if "BIG-IP" in msg_upper or "F5" in app_upper:
         return F5
-    if "devname" in event.kv or "logid" in event.kv:
+    if "logid" in event.kv:
         return FORTINET
-    if "log_id" in event.kv or event.kv.get("device") == "SFW":
+    if "log_id" in event.kv:
         return SOPHOS
     if "VMWARE" in msg_upper or "ESXI" in msg_upper or "VMWARE" in app_upper:
         return VMWARE

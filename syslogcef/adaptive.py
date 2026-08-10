@@ -31,9 +31,14 @@ def _epoch(match: "re.Match[str]", now: Optional[datetime]) -> datetime:
 def _mon_day(match: "re.Match[str]", now: Optional[datetime]) -> datetime:
     month = month_abbr_to_int(match.group("month"))
     day = int(match.group("day"))
-    hour, minute, second = map(int, match.group("hms").split(":"))
-    year = int(match.group("year")) if match.groupdict().get("year") else (now or datetime.now(timezone.utc)).year
-    return datetime(year, month, day, hour, minute, second, tzinfo=timezone.utc)
+    if match.groupdict().get("year"):
+        hour, minute, second = map(int, match.group("hms").split(":"))
+        return datetime(int(match.group("year")), month, day, hour, minute, second, tzinfo=timezone.utc)
+    # No year: use the same rollover inference as the dedicated parsers so a
+    # December event parsed in January lands in the previous year.
+    from .parsers import _infer_timestamp
+
+    return _infer_timestamp(month, day, match.group("hms"), now=now)
 
 
 def _ymd_slash(match: "re.Match[str]", now: Optional[datetime]) -> datetime:
@@ -61,6 +66,16 @@ TIMESTAMP_LIB: Tuple[Tuple[str, str, Callable], ...] = (
 
 HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _SKIP_HOST_TOKENS = {"error", "warning", "info", "debug", "notice", "kernel"}
+
+
+def _valid_host(candidate: Optional[str]) -> bool:
+    return bool(
+        candidate
+        and "=" not in candidate
+        and HOST_RE.match(candidate)
+        and candidate.lower() not in _SKIP_HOST_TOKENS
+        and not candidate.isdigit()
+    )
 
 _CACHE: Dict[str, Tuple[Pattern[str], str, Callable]] = {}
 _CACHE_MAX = 256
@@ -131,8 +146,15 @@ def adaptive_parse(line: str, *, now: Optional[datetime] = None):
                 ts = conv(pattern_ts_match(pattern, match), now)
             except (ValueError, KeyError):
                 ts = None
-            host = match.groupdict().get("adaptive_host")
-            msg = match.groupdict().get("adaptive_msg", "") or line
+            gd = match.groupdict()
+            host = gd.get("adaptive_host")
+            msg = gd.get("adaptive_msg")
+            msg = line if msg is None else msg
+            # The shape signature reduces all words to the same class, so a
+            # cached host slot may capture a non-host token; revalidate.
+            if host is not None and not _valid_host(host.rstrip(":,")):
+                msg = f"{host} {msg}".strip()
+                host = None
             return _build_event(raw, pri, ts, host, msg)
 
     # Analysis pass: find the earliest timestamp in the line head.
@@ -157,12 +179,7 @@ def adaptive_parse(line: str, *, now: Optional[datetime] = None):
     tokens = rest.split(None, 1)
     if tokens:
         candidate = tokens[0].rstrip(":,")
-        if (
-            "=" not in candidate
-            and HOST_RE.match(candidate)
-            and candidate.lower() not in _SKIP_HOST_TOKENS
-            and not candidate.isdigit()
-        ):
+        if _valid_host(candidate):
             host = candidate
             msg = tokens[1] if len(tokens) > 1 else ""
 
