@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-10
+
+### Added
+
+- `syslogcef(1)` man page, installed by the RPM, Debian, and Alpine
+  packages.
+- Multi-arch (amd64/arm64) container image published to
+  `ghcr.io/allamiro/syslogcef` on each release.
+- COPR repository (`allamiro/syslogcef`) building for Fedora, EPEL 9/10,
+  and CentOS Stream 9/10 on x86_64 and aarch64, rebuilt automatically on
+  every push.
+
+### Fixed
+
+- Python 3.9 compatibility: dataclasses no longer use `slots=True`
+  (a Python 3.10 feature), so the declared `requires-python >= 3.9` is
+  accurate again.
+- EPEL 9 RPM builds use the python3.11 stack, whose setuptools supports
+  PEP 621 metadata.
+
 ## [0.1.0] - 2026-08-10
 
 Initial release.
@@ -37,5 +57,6 @@ Initial release.
 - `--tail` now follows all given input files instead of blocking on the
   first one.
 
-[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/allamiro/syslogcef/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/allamiro/syslogcef/releases/tag/v0.1.0
