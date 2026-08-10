@@ -1,5 +1,5 @@
 Name:           syslogcef
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -67,5 +67,10 @@ install -D -m 0644 %{SOURCE3} %{buildroot}%{_mandir}/man1/syslogcef.1
 %config(noreplace) %{_sysconfdir}/syslogcef/syslogcef.conf
 
 %changelog
+* Mon Aug 10 2026 Tamir Suliman <allamiro@gmail.com> - 0.1.1-1
+- Add syslogcef(1) man page
+- Restore Python 3.9 compatibility (remove dataclass slots)
+- Build against the python3.11 stack on EPEL 9
+
 * Mon Aug 10 2026 Tamir Suliman <allamiro@gmail.com> - 0.1.0-1
 - Initial RPM release with systemd service and configuration file
