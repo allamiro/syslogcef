@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Dict, Mapping, Optional
 
 from .normalizer import NormalizedEvent
-from .utils import cef_escape
+from .utils import cef_escape, cef_escape_header
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class MappingResolver:
         header = {}
         for key in ["deviceVendor", "deviceProduct", "deviceVersion", "eventClassId", "name"]:
             template = self.mapping.get(key, DEFAULT_MAPPING[key])
-            header[key] = self._format(template, fields)
+            header[key] = cef_escape_header(self._format(template, fields))
         severity = self._resolve_severity(fields)
         header["severity"] = severity
         return header

@@ -21,6 +21,21 @@ def test_convert_line_helper():
     assert "CEF:0|Cisco|ASA" in cef
 
 
+def test_header_pipe_injection_is_escaped():
+    line = "<14>Jan  1 12:34:56 host1 app: evil|Fake|Vendor|9|spoofed message"
+    cef = convert_line(line, mapping={})
+    # The message lands in the CEF "name" header slot; pipes inside it must be
+    # escaped so they cannot forge extra header fields.
+    assert "evil\\|Fake\\|Vendor" in cef
+    assert cef.count("|") - cef.count("\\|") == 7
+
+
+def test_header_newlines_are_stripped():
+    line = "<14>Jan  1 12:34:56 host1 app: first\nsecond"
+    cef = convert_line(line, mapping={})
+    assert "\n" not in cef
+
+
 def test_default_linux_mapping_does_not_crash():
     # Regression test: the auto-guessed Linux mapping used to contain an
     # invalid %-format template that raised ValueError for every event.
