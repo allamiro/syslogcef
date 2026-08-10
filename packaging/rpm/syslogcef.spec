@@ -5,7 +5,7 @@ Summary:        Convert syslog events to ArcSight CEF
 
 License:        MIT
 URL:            https://github.com/allamiro/syslogcef
-Source0:        %{pypi_source syslogcef}
+Source0:        %{pypi_source syslog2cef}
 Source1:        syslogcef.service
 Source2:        syslogcef.conf
 
@@ -22,7 +22,7 @@ package installs the syslogcef command line tool and a systemd service
 that follows a configured log file and appends CEF output.
 
 %prep
-%autosetup -n syslogcef-%{version}
+%autosetup -n syslog2cef-%{version}
 
 %generate_buildrequires
 %pyproject_buildrequires
