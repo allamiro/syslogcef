@@ -19,3 +19,19 @@ def test_convert_line_helper():
     line = "<166>Jan  1 12:34:56 router1 %ASA-6-302013: Built inbound TCP connection src=10.0.0.1 dst=10.0.0.2"
     cef = convert_line(line, mapping=CISCO_ASA)
     assert "CEF:0|Cisco|ASA" in cef
+
+
+def test_default_linux_mapping_does_not_crash():
+    # Regression test: the auto-guessed Linux mapping used to contain an
+    # invalid %-format template that raised ValueError for every event.
+    line = "<13>Jan  2 10:00:00 web01 sshd[123]: Failed password for root from 10.1.1.1 port 22"
+    cef = convert_line(line)
+    assert cef.startswith("CEF:0|Linux|Syslog|")
+    assert "linux.syslog" in cef
+
+
+def test_invalid_mapping_template_degrades_gracefully():
+    line = "<13>Jan  2 10:00:00 web01 sshd[123]: Failed password for root"
+    mapping = {"eventClassId": "broken.%{msgid}"}
+    cef = convert_line(line, mapping=mapping)
+    assert cef.startswith("CEF:0|")
