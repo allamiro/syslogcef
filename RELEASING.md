@@ -37,9 +37,13 @@ The publish job supports two methods; it picks automatically:
    on pypi.org (Account settings -> API tokens). Simplest to start with.
 2. Trusted publishing (OIDC, no token), used when the secret is absent.
    On pypi.org, under the project (or as a pending publisher for the
-   first release): Publishing -> Add a new publisher with owner
-   `allamiro`, repository `syslogcef`, workflow `release.yml`,
-   environment `pypi`.
+   first release): Publishing -> Add a new publisher with PyPI project
+   name `syslog2cef`, owner `allamiro`, repository `syslogcef`,
+   workflow `release.yml`, environment `pypi`.
+
+Note: the PyPI distribution is `syslog2cef` (the `syslogcef` name on
+PyPI belongs to an unrelated project); the import package and CLI
+remain `syslogcef`.
 
 The GitHub environment named `pypi` already exists in the repository
 settings. Once either method is configured, every new tag publishes

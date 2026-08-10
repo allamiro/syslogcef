@@ -23,10 +23,12 @@ platforms that consume CEF.
 
 ## Installation
 
-From PyPI:
+From PyPI (the distribution is named `syslog2cef` because the `syslogcef`
+name on PyPI belongs to an unrelated project; the import package and CLI
+are still `syslogcef`):
 
 ```bash
-pip install syslogcef
+pip install syslog2cef
 ```
 
 From source:
