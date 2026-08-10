@@ -34,3 +34,19 @@ def test_header_newlines_are_stripped():
     line = "<14>Jan  1 12:34:56 host1 app: first\nsecond"
     cef = convert_line(line, mapping={})
     assert "\n" not in cef
+
+
+def test_default_linux_mapping_does_not_crash():
+    # Regression test: the auto-guessed Linux mapping used to contain an
+    # invalid %-format template that raised ValueError for every event.
+    line = "<13>Jan  2 10:00:00 web01 sshd[123]: Failed password for root from 10.1.1.1 port 22"
+    cef = convert_line(line)
+    assert cef.startswith("CEF:0|Linux|Syslog|")
+    assert "linux.syslog" in cef
+
+
+def test_invalid_mapping_template_degrades_gracefully():
+    line = "<13>Jan  2 10:00:00 web01 sshd[123]: Failed password for root"
+    mapping = {"eventClassId": "broken.%{msgid}"}
+    cef = convert_line(line, mapping=mapping)
+    assert cef.startswith("CEF:0|")
