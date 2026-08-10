@@ -65,6 +65,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Convert syslog lines to ArcSight CEF")
     parser.add_argument("paths", nargs="*", type=Path, help="Input files (defaults to stdin)")
     parser.add_argument("-o", "--output", type=Path, help="Output file")
+    parser.add_argument("-a", "--append", action="store_true", help="Append to --output instead of truncating it")
     parser.add_argument("--mode", choices=["rfc3164", "rfc5424", "rsyslog_json", "rsyslog_file", "journald_json", "journald_short", "journald_iso"], help="Parser mode override")
     parser.add_argument("--mapping", type=str, help="Mapping JSON file")
     parser.add_argument("--tail", action="store_true", help="Follow file like tail -f")
@@ -88,9 +89,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         outputs = process_lines(iter_lines_from_sources(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size)
 
     if args.output:
-        with args.output.open("w", encoding="utf-8") as fp:
+        with args.output.open("a" if args.append else "w", encoding="utf-8") as fp:
             for cef in outputs:
                 fp.write(cef + "\n")
+                if args.tail:
+                    fp.flush()
     else:
         for cef in outputs:
             print(cef)

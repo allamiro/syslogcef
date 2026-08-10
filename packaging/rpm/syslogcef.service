@@ -1,0 +1,18 @@
+[Unit]
+Description=syslogcef syslog to CEF converter
+Documentation=https://github.com/allamiro/syslogcef
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/syslogcef/syslogcef.conf
+ExecStart=/usr/bin/syslogcef $INPUT_FILE --tail --append --output $OUTPUT_FILE $EXTRA_ARGS
+Restart=on-failure
+RestartSec=5
+LogsDirectory=syslogcef
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target
