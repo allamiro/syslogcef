@@ -15,12 +15,15 @@ mkdir -p \
   "$STAGE/usr/bin" \
   "$STAGE/lib/systemd/system" \
   "$STAGE/etc/syslogcef" \
-  "$STAGE/usr/share/doc/syslogcef"
+  "$STAGE/usr/share/doc/syslogcef" \
+  "$STAGE/usr/share/man/man1"
 
 install -m 0755 "$PYZ" "$STAGE/usr/bin/syslogcef"
 install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef.service" "$STAGE/lib/systemd/system/syslogcef.service"
 install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef.conf" "$STAGE/etc/syslogcef/syslogcef.conf"
 install -m 0644 "$REPO_ROOT/README.md" "$REPO_ROOT/LICENSE" "$REPO_ROOT/CHANGELOG.md" "$STAGE/usr/share/doc/syslogcef/"
+install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef.1" "$STAGE/usr/share/man/man1/syslogcef.1"
+gzip -9n "$STAGE/usr/share/man/man1/syslogcef.1"
 
 INSTALLED_SIZE=$(du -sk "$STAGE" | cut -f1)
 

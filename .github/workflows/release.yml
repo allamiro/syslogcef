@@ -76,7 +76,7 @@ jobs:
           sed -i "s/^Version:.*/Version:        ${VERSION}/" packaging/rpm/syslogcef.spec
           rpmdev-setuptree
           cp dist/syslog2cef-*.tar.gz "$HOME/rpmbuild/SOURCES/"
-          cp packaging/rpm/syslogcef.service packaging/rpm/syslogcef.conf "$HOME/rpmbuild/SOURCES/"
+          cp packaging/rpm/syslogcef.service packaging/rpm/syslogcef.conf packaging/rpm/syslogcef.1 "$HOME/rpmbuild/SOURCES/"
           # Resolve the dynamically generated build requirements
           # (%pyproject_buildrequires), then do the real build. When every
           # requirement is already installed, rpmbuild -br succeeds without
@@ -207,6 +207,7 @@ jobs:
             -p "/usr/bin/env python3" \
             -c -o "packaging/apk/syslogcef-${VERSION}.pyz"
 
+          cp packaging/rpm/syslogcef.1 packaging/apk/
           sed -i "s/^pkgver=.*/pkgver=${VERSION}/" packaging/apk/APKBUILD
           chown -R builder packaging/apk /home/builder/.abuild
           su builder -c "cd packaging/apk && abuild checksum && abuild -r"
