@@ -34,7 +34,7 @@ DEFAULT_MAPPING = {
 }
 
 
-@dataclass(slots=True)
+@dataclass
 class CEFEvent:
     header: Dict[str, str]
     extensions: Dict[str, str]

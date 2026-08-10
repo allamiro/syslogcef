@@ -9,8 +9,14 @@ Source0:        %{pypi_source syslog2cef}
 Source1:        syslogcef.service
 Source2:        syslogcef.conf
 
+# EPEL 9's default Python (3.9) ships setuptools 53, too old for PEP 621
+# metadata, so build against the python3.11 stack there.
+%if 0%{?el9}
+%global python3_pkgversion 3.11
+%endif
+
 BuildArch:      noarch
-BuildRequires:  python3-devel
+BuildRequires:  python%{python3_pkgversion}-devel
 BuildRequires:  pyproject-rpm-macros
 BuildRequires:  systemd-rpm-macros
 

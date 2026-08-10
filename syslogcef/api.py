@@ -15,7 +15,7 @@ from .cef import CEFEvent, build_cef
 logger = logging.getLogger(__name__)
 
 
-@dataclass(slots=True)
+@dataclass
 class ParseResult:
     """Container returned by :func:`parse_syslog`.
 

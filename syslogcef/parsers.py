@@ -19,7 +19,7 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 
-@dataclass(slots=True)
+@dataclass
 class ParsedEvent:
     pri: Optional[int]
     facility: Optional[int]
