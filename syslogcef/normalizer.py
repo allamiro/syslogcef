@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Dict, Mapping, Optional
@@ -91,12 +92,24 @@ def _derive_common_fields(event: NormalizedEvent) -> None:
         if code:
             event.kv["event_code"] = code
 
+    # Cisco codes embed the severity digit (%SEC-6-IPACCESSLOGRP -> 6);
+    # use it when the line carried no PRI.
+    if event.severity is None:
+        code = event.kv.get("event_code", "")
+        sev_match = re.search(r"-(\d)-", code)
+        if sev_match:
+            event.severity = int(sev_match.group(1))
+
+
+CISCO_CODE_RE = re.compile(r"%([A-Z][A-Z0-9_]*(?:-[A-Z0-9_]+)*-\d-[A-Z0-9_]+)")
+
 
 def _extract_event_code(msg: str) -> Optional[str]:
-    # Cisco ASA style: %ASA-6-106100: message
-    if msg.startswith("%") and ":" in msg:
-        head = msg.split(":", 1)[0]
-        return head.strip("%")
+    # Cisco style codes (%ASA-6-106100, %SEC-6-IPACCESSLOGRP, %LINK-3-UPDOWN)
+    # may appear at the start of the message or after an inline timestamp.
+    match = CISCO_CODE_RE.search(msg)
+    if match:
+        return match.group(1)
     return None
 
 

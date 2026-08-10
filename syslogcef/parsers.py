@@ -39,9 +39,11 @@ class ParsedEvent:
 RFC3164_RE = re.compile(
     r"^(?:<(?P<pri>\d+)>)?"
     r"(?P<month>[A-Z][a-z]{2})\s+"
-    r"(?P<day>\d{1,2})\s"
+    r"(?P<day>\d{1,2})\s+"
+    r"(?:(?P<year>\d{4})\s+)?"
     r"(?P<time>\d{2}:\d{2}:\d{2})\s"
-    r"(?P<host>[^\s]+)\s"
+    r"(?P<host>[^\s]+?):?\s+"
+    r"(?::\s+)?"
     r"(?:(?P<tag>[\w\-/\.]+)(?:\[(?P<pid>[^\]]+)\])?:\s?)?"
     r"(?P<msg>.*)$"
 )
@@ -129,7 +131,13 @@ def parse_rfc3164(line: str, *, now: Optional[datetime]) -> ParsedEvent | None:
     pri = int(gd["pri"]) if gd.get("pri") else None
     facility, severity = convert_pri(pri)
     month = month_abbr_to_int(gd["month"])
-    ts = _infer_timestamp(month, int(gd["day"]), gd["time"], now=now)
+    hour, minute, second = map(int, gd["time"].split(":"))
+    if gd.get("year"):
+        ts = datetime(int(gd["year"]), month, int(gd["day"]), hour, minute, second, tzinfo=timezone.utc)
+        ts_orig = f"{gd['month']} {gd['day']} {gd['year']} {gd['time']}"
+    else:
+        ts = _infer_timestamp(month, int(gd["day"]), gd["time"], now=now)
+        ts_orig = f"{gd['month']} {gd['day']} {gd['time']}"
     app = gd.get("tag")
     msg = gd.get("msg", "")
     return ParsedEvent(
@@ -137,7 +145,7 @@ def parse_rfc3164(line: str, *, now: Optional[datetime]) -> ParsedEvent | None:
         facility=facility,
         severity=severity,
         ts=ts,
-        ts_orig=f"{gd['month']} {gd['day']} {gd['time']}",
+        ts_orig=ts_orig,
         host=gd.get("host"),
         app=app,
         pid=gd.get("pid"),
@@ -354,12 +362,20 @@ def autodetect_and_parse(line: str, *, mode: Optional[str] = None, now: Optional
             logger.exception("Parser %s failed for line", key)
             continue
 
-    # Fallback to raw message if nothing matches.
+    # Fallback to raw message if nothing matches. A leading <PRI> is still
+    # honored so facility/severity survive for non-standard formats.
     logger.debug("Falling back to raw parser for line: %s", line)
+    pri = None
+    body = line
+    pri_match = re.match(r"^<(\d{1,3})>", line)
+    if pri_match:
+        pri = int(pri_match.group(1))
+        body = line[pri_match.end():]
+    facility, severity = convert_pri(pri)
     return ParsedEvent(
-        pri=None,
-        facility=None,
-        severity=None,
+        pri=pri,
+        facility=facility,
+        severity=severity,
         ts=None,
         ts_orig="",
         host=guess_hostname(),
@@ -367,7 +383,7 @@ def autodetect_and_parse(line: str, *, mode: Optional[str] = None, now: Optional
         pid=None,
         msgid=None,
         sd={},
-        msg=sanitize_message(line),
+        msg=sanitize_message(body),
         raw=line,
         source_hint="unknown",
     )
