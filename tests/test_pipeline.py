@@ -19,3 +19,18 @@ def test_convert_line_helper():
     line = "<166>Jan  1 12:34:56 router1 %ASA-6-302013: Built inbound TCP connection src=10.0.0.1 dst=10.0.0.2"
     cef = convert_line(line, mapping=CISCO_ASA)
     assert "CEF:0|Cisco|ASA" in cef
+
+
+def test_header_pipe_injection_is_escaped():
+    line = "<14>Jan  1 12:34:56 host1 app: evil|Fake|Vendor|9|spoofed message"
+    cef = convert_line(line, mapping={})
+    # The message lands in the CEF "name" header slot; pipes inside it must be
+    # escaped so they cannot forge extra header fields.
+    assert "evil\\|Fake\\|Vendor" in cef
+    assert cef.count("|") - cef.count("\\|") == 7
+
+
+def test_header_newlines_are_stripped():
+    line = "<14>Jan  1 12:34:56 host1 app: first\nsecond"
+    cef = convert_line(line, mapping={})
+    assert "\n" not in cef

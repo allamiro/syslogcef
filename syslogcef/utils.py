@@ -130,5 +130,15 @@ def cef_escape(value: str) -> str:
         value.replace("\\", "\\\\")
         .replace("|", "\\|")
         .replace("=", "\\=")
+        .replace("\r", "\\r")
         .replace("\n", "\\n")
+    )
+
+
+def cef_escape_header(value: str) -> str:
+    return (
+        value.replace("\\", "\\\\")
+        .replace("|", "\\|")
+        .replace("\r", " ")
+        .replace("\n", " ")
     )
