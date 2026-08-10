@@ -85,3 +85,96 @@ def test_listener_lines_convert_end_to_end():
     thread.join(5)
     cef = convert_line(lines[0])
     assert cef.startswith("CEF:0|Cisco|ASA|")
+
+
+# --- forwarding ---------------------------------------------------------------
+
+def test_create_sender_parses_targets():
+    from syslogcef.net import SyslogSender, create_sender
+
+    s = create_sender("udp://siem.example.com:514")
+    assert isinstance(s, SyslogSender) and s.proto == "udp" and s.port == 514
+    s.close()
+    for bad in ("udp://nohost", "ftp://x:1", "kafka://broker:9092"):
+        with pytest.raises(ValueError):
+            create_sender(bad)
+
+
+def test_udp_sender_delivers_to_listener():
+    from syslogcef.net import create_sender
+
+    rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    rx.bind(("127.0.0.1", 0))
+    rx.settimeout(5)
+    port = rx.getsockname()[1]
+    sender = create_sender(f"udp://127.0.0.1:{port}")
+    sender.send("CEF:0|Cisco|ASA|auto|x|y|2|src=1.2.3.4")
+    data, _ = rx.recvfrom(65535)
+    sender.close()
+    rx.close()
+    assert data.decode() == "CEF:0|Cisco|ASA|auto|x|y|2|src=1.2.3.4"
+
+
+def test_tcp_sender_delivers_newline_delimited():
+    from syslogcef.net import create_sender
+
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+    srv.settimeout(5)
+    port = srv.getsockname()[1]
+
+    sender = create_sender(f"tcp://127.0.0.1:{port}")
+    sender.send("record one")
+    conn, _ = srv.accept()
+    conn.settimeout(5)
+    sender.send("record two")
+    sender.close()
+    received = b""
+    while b"two\n" not in received:
+        received += conn.recv(1024)
+    conn.close()
+    srv.close()
+    assert received == b"record one\nrecord two\n"
+
+
+def test_rate_limiter_paces_sends():
+    from syslogcef.net import RateLimiter
+
+    sleeps = []
+    clock_value = [0.0]
+
+    def clock():
+        return clock_value[0]
+
+    def sleep(seconds):
+        sleeps.append(seconds)
+        clock_value[0] += seconds
+
+    limiter = RateLimiter(10, clock=clock, sleep=sleep)  # 0.1s interval
+    for _ in range(3):
+        limiter.wait()
+    assert sum(sleeps) == pytest.approx(0.2, abs=0.01)
+
+
+def test_kafka_sender_uses_injected_producer():
+    from syslogcef.net import KafkaSender
+
+    class FakeProducer:
+        def __init__(self):
+            self.sent = []
+            self.flushed = False
+
+        def send(self, topic, payload):
+            self.sent.append((topic, payload))
+
+        def flush(self):
+            self.flushed = True
+
+    producer = FakeProducer()
+    sender = KafkaSender("broker:9092", "cef-events", producer=producer)
+    sender.send("CEF:0|a|b|1|c|d|5|")
+    sender.close()
+    assert producer.sent == [("cef-events", b"CEF:0|a|b|1|c|d|5|")]
+    assert producer.flushed

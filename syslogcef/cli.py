@@ -106,6 +106,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--mapping", type=str, help="Mapping JSON file")
     parser.add_argument("--tail", action="store_true", help="Follow file like tail -f")
     parser.add_argument("--listen", metavar="PROTO:PORT", help="Receive syslog over the network instead of reading files/stdin, e.g. udp:514, tcp:5514, or udp:10.0.0.5:514")
+    parser.add_argument("--send", metavar="URL", help="Forward CEF records to udp://HOST:PORT, tcp://HOST:PORT (newline-delimited, with reconnect), or kafka://BROKER:PORT/TOPIC (requires the kafka extra)")
+    parser.add_argument("--eps", type=float, help="Rate-limit --send to at most this many events per second")
     parser.add_argument("--multiprocess", action="store_true", help="Process lines using a process pool")
     parser.add_argument("--pool-size", type=int, help="Number of worker processes for --multiprocess")
     parser.add_argument("--log-level", default="WARNING", help="Logging level")
@@ -130,15 +132,33 @@ def main(argv: Optional[list[str]] = None) -> int:
     else:
         outputs = process_lines(iter_lines_from_sources(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size)
 
-    if args.output:
-        with args.output.open("a" if args.append else "w", encoding="utf-8") as fp:
+    sender = None
+    if args.send:
+        from .net import create_sender
+
+        try:
+            sender = create_sender(args.send, eps=args.eps)
+        except (ValueError, RuntimeError) as exc:
+            parser.error(str(exc))
+
+    try:
+        if args.output:
+            with args.output.open("a" if args.append else "w", encoding="utf-8") as fp:
+                for cef in outputs:
+                    fp.write(cef + "\n")
+                    if args.tail or args.listen:
+                        fp.flush()
+                    if sender:
+                        sender.send(cef)
+        elif sender:
             for cef in outputs:
-                fp.write(cef + "\n")
-                if args.tail or args.listen:
-                    fp.flush()
-    else:
-        for cef in outputs:
-            print(cef)
+                sender.send(cef)
+        else:
+            for cef in outputs:
+                print(cef)
+    finally:
+        if sender:
+            sender.close()
     return 0
 
 
