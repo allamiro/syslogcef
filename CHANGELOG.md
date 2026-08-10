@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-11
+
+Validated against all 543 filebeat module test logs from elastic/beats
+(103,837 lines, zero crashes).
+
+### Fixed
+
+- RFC3164 timestamps may include a year (`Oct 10 2018 12:34:56`), the
+  format real Cisco ASA/FTD devices emit.
+- Hostnames followed by a trailing or standalone colon now parse.
+- Cisco `%FAC-SEV-MNEMONIC` event codes are extracted from anywhere in
+  the message (IOS sequence-numbered lines), and their severity digit is
+  used when the line has no PRI.
+- The raw fallback parser preserves a leading `<PRI>` (Sophos XG style),
+  keeping facility and severity.
+- Auto-mapping routes FTD event codes to the ASA mapping and other Cisco
+  codes to the IOS mapping.
+
 ## [0.1.1] - 2026-08-10
 
 ### Added
@@ -57,6 +75,7 @@ Initial release.
 - `--tail` now follows all given input files instead of blocking on the
   first one.
 
-[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/allamiro/syslogcef/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/allamiro/syslogcef/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/allamiro/syslogcef/releases/tag/v0.1.0

@@ -1,5 +1,5 @@
 Name:           syslogcef
-Version:        0.1.1
+Version:        0.1.2
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -67,6 +67,12 @@ install -D -m 0644 %{SOURCE3} %{buildroot}%{_mandir}/man1/syslogcef.1
 %config(noreplace) %{_sysconfdir}/syslogcef/syslogcef.conf
 
 %changelog
+* Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.1.2-1
+- Parse RFC3164 timestamps with a year (real Cisco ASA/FTD format)
+- Parse hosts with trailing or standalone colons
+- Extract Cisco event codes anywhere in the message and derive severity
+- Preserve PRI in the raw fallback parser
+
 * Mon Aug 10 2026 Tamir Suliman <allamiro@gmail.com> - 0.1.1-1
 - Add syslogcef(1) man page
 - Restore Python 3.9 compatibility (remove dataclass slots)
