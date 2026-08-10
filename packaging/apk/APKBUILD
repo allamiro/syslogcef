@@ -15,4 +15,5 @@ package() {
 	install -Dm755 "$srcdir"/syslogcef.initd "$pkgdir"/etc/init.d/syslogcef
 	install -Dm644 "$srcdir"/syslogcef.confd "$pkgdir"/etc/conf.d/syslogcef
 	install -Dm644 "$srcdir"/syslogcef.1 "$pkgdir"/usr/share/man/man1/syslogcef.1
+	gzip -9n "$pkgdir"/usr/share/man/man1/syslogcef.1
 }
