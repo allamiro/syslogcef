@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/allamiro/syslogcef/main/docs/logo.svg" alt="syslogcef logo" width="540">
+</p>
+
 # syslogcef
 
 syslogcef converts syslog events into ArcSight Common Event Format (CEF). It
