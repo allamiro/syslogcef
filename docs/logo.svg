@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="170" viewBox="0 0 720 170" role="img" aria-label="syslogcef: syslog to CEF converter">
+  <defs>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#818cf8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- terminal window -->
+  <rect x="2" y="2" width="716" height="166" rx="18" fill="#0f172a" stroke="#1e293b" stroke-width="4"/>
+  <rect x="2" y="2" width="716" height="40" rx="18" fill="#1e293b"/>
+  <rect x="2" y="24" width="716" height="18" fill="#1e293b"/>
+  <circle cx="30" cy="22" r="7" fill="#f87171"/>
+  <circle cx="54" cy="22" r="7" fill="#fbbf24"/>
+  <circle cx="78" cy="22" r="7" fill="#34d399"/>
+  <text x="356" y="28" font-family="Menlo, Consolas, monospace" font-size="15" fill="#94a3b8" text-anchor="middle">syslogcef</text>
+
+  <!-- input line -->
+  <text x="36" y="82" font-family="Menlo, Consolas, monospace" font-size="24" fill="#64748b">&lt;166&gt;</text>
+  <text x="110" y="82" font-family="Menlo, Consolas, monospace" font-size="24" fill="#e2e8f0">syslog</text>
+
+  <!-- arrow -->
+  <path d="M 210 74 H 280" stroke="url(#accent)" stroke-width="6" stroke-linecap="round"/>
+  <path d="M 272 60 L 294 74 L 272 88 Z" fill="#818cf8"/>
+
+  <!-- output line -->
+  <text x="316" y="82" font-family="Menlo, Consolas, monospace" font-size="26" font-weight="bold" fill="url(#accent)">CEF:0</text>
+  <text x="402" y="82" font-family="Menlo, Consolas, monospace" font-size="26" fill="#475569">|</text>
+  <text x="416" y="82" font-family="Menlo, Consolas, monospace" font-size="24" fill="#e2e8f0">vendor</text>
+  <text x="510" y="82" font-family="Menlo, Consolas, monospace" font-size="26" fill="#475569">|</text>
+  <text x="524" y="82" font-family="Menlo, Consolas, monospace" font-size="24" fill="#e2e8f0">product</text>
+  <text x="632" y="82" font-family="Menlo, Consolas, monospace" font-size="26" fill="#475569">|</text>
+
+  <!-- tagline -->
+  <text x="36" y="134" font-family="Menlo, Consolas, monospace" font-size="18" fill="#94a3b8">$ syslogcef /var/log/messages --tail</text>
+  <rect x="452" y="118" width="11" height="20" fill="#38bdf8">
+    <animate attributeName="opacity" values="1;0;1" dur="1.6s" repeatCount="indefinite"/>
+  </rect>
+</svg>
