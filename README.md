@@ -80,6 +80,10 @@ signatures. The public key is committed at
 
 ## Command Line Usage
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/allamiro/syslogcef/main/docs/demo.svg" alt="Animated demo of syslogcef converting different formats" width="820">
+</p>
+
 ```bash
 # Read from stdin, write CEF to stdout
 syslogcef < /var/log/syslog
