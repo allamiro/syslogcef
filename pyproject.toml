@@ -26,6 +26,9 @@ Issues = "https://github.com/allamiro/syslogcef/issues"
 test = [
   "pytest>=7",
 ]
+kafka = [
+  "kafka-python>=2.0",
+]
 
 [project.scripts]
 syslogcef = "syslogcef.cli:main"
