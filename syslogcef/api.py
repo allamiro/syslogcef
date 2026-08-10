@@ -74,14 +74,23 @@ def _load_mapping(mapping: Mapping[str, Any] | Path | str | None) -> Mapping[str
 def to_cef(
     event: NormalizedEvent,
     mapping: Mapping[str, Any] | Path | str | None = None,
+    *,
+    validate: bool = False,
+    strict: bool = False,
 ) -> str:
-    """Convert a normalized event into a CEF string."""
+    """Convert a normalized event into a CEF string.
+
+    With ``validate=True``, extension values are checked against the
+    ArcSight dictionary and violations logged as warnings; ``strict=True``
+    additionally raises :class:`syslogcef.validation.CEFValidationError`
+    on type or length violations.
+    """
 
     if mapping is None:
         mapping_data = _guess_mapping(event)
     else:
         mapping_data = _load_mapping(mapping)
-    cef_event = build_cef(event, mapping_data)
+    cef_event = build_cef(event, mapping_data, validate=validate, strict=strict)
     return cef_event.render()
 
 
@@ -91,13 +100,15 @@ def convert_line(
     mode: Optional[str] = None,
     mapping: Mapping[str, Any] | Path | str | None = None,
     now: Optional[datetime] = None,
+    validate: bool = False,
+    strict: bool = False,
 ) -> str:
     """Full pipeline that parses, normalizes and converts a syslog line."""
 
     parsed = parse_syslog(line, mode=mode, now=now)
     normalized = normalize_event(parsed)
 
-    return to_cef(normalized, mapping)
+    return to_cef(normalized, mapping, validate=validate, strict=strict)
 
 
 def _guess_mapping(event: NormalizedEvent) -> Mapping[str, Any]:

@@ -76,15 +76,18 @@ class MappingResolver:
             return "3"
         return severity_map.get(str(value), str(value))
 
-    def resolve_extensions(self, fields: Mapping[str, Any]) -> Dict[str, str]:
-        extensions = {}
+    def resolve_raw_extensions(self, fields: Mapping[str, Any]) -> Dict[str, str]:
+        raw = {}
         merged = DEFAULT_MAPPING["extensions"].copy()
         merged.update(self.mapping.get("extensions", {}))
         for key, template in merged.items():
             value = self._format(template, fields)
             if value:
-                extensions[key] = cef_escape(str(value))
-        return extensions
+                raw[key] = str(value)
+        return raw
+
+    def resolve_extensions(self, fields: Mapping[str, Any]) -> Dict[str, str]:
+        return {k: cef_escape(v) for k, v in self.resolve_raw_extensions(fields).items()}
 
     def _format(self, template: str, fields: Mapping[str, Any]) -> str:
         try:
@@ -97,11 +100,27 @@ class MappingResolver:
             return ""
 
 
-def build_cef(event: NormalizedEvent, mapping: Mapping[str, Any]) -> CEFEvent:
+def build_cef(
+    event: NormalizedEvent,
+    mapping: Mapping[str, Any],
+    *,
+    validate: bool = False,
+    strict: bool = False,
+) -> CEFEvent:
     resolver = MappingResolver(mapping)
     fields = event.as_field_dict()
     header = resolver.resolve_header(fields)
-    extensions = resolver.resolve_extensions(fields)
+    raw = resolver.resolve_raw_extensions(fields)
+    if validate or strict:
+        from .validation import CEFValidationError, validate_extensions
+
+        findings = validate_extensions(raw)
+        for finding in findings:
+            logger.warning("CEF validation: %s", finding)
+        fatal = [f for f in findings if f.fatal]
+        if strict and fatal:
+            raise CEFValidationError("; ".join(str(f) for f in fatal))
+    extensions = {k: cef_escape(v) for k, v in raw.items()}
     return CEFEvent(header=header, extensions=extensions)
 
 
