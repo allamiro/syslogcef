@@ -1,0 +1,19 @@
+{
+  "deviceVendor": "Fortinet",
+  "deviceProduct": "FortiGate",
+  "deviceVersion": "auto",
+  "eventClassId": "fortinet.%(logid)s",
+  "name": "%(message_short)s",
+  "extensions": {
+    "dvchost": "%(devname)s",
+    "src": "%(srcip)s",
+    "dst": "%(dstip)s",
+    "spt": "%(srcport)s",
+    "dpt": "%(dstport)s",
+    "act": "%(action)s",
+    "app": "%(service)s",
+    "cat": "%(type)s",
+    "cs1Label": "rawEvent",
+    "cs1": "%(raw)s"
+  }
+}

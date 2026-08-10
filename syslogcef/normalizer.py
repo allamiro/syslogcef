@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Mapping, Optional
 
 from .parsers import ParsedEvent
-from .utils import ensure_tzaware, parse_key_value_pairs, sanitize_message
+from .utils import ensure_tzaware, parse_key_value_pairs, sanitize_message, severity_from_word
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +99,17 @@ def _derive_common_fields(event: NormalizedEvent) -> None:
         sev_match = re.search(r"-(\d)-", code)
         if sev_match:
             event.severity = int(sev_match.group(1))
+
+    # Key=value formats often carry a textual level (level="notice",
+    # priority=Information); use it when no PRI was present.
+    if event.severity is None:
+        for key in ("level", "priority", "severity"):
+            word = event.kv.get(key)
+            if word:
+                sev = severity_from_word(word)
+                if sev is not None:
+                    event.severity = sev
+                    break
 
 
 CISCO_CODE_RE = re.compile(r"%([A-Z][A-Z0-9_]*(?:-[A-Z0-9_]+)*-\d-[A-Z0-9_]+)")
