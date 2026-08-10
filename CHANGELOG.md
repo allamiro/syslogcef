@@ -22,6 +22,10 @@ Initial release.
   ASA, Cisco IOS, F5, generic Linux, and VMware.
 - Command line interface with stdin/file input, output file support, tail
   (follow) mode, and optional multiprocessing.
+- Release packaging: PyPI distribution (as `syslog2cef`), signed RPM and
+  Debian packages with a systemd service, signed Alpine APK with an
+  OpenRC service, standalone executable zipapp, and source zip — all
+  GPG-signed with a signed SHA256SUMS manifest.
 - Test suite and GitHub Actions CI.
 
 ### Fixed

@@ -39,8 +39,24 @@ cd syslogcef
 pip install .
 ```
 
-An RPM package with a systemd service is also available from the GitHub
-releases page; see "Running as a service" below.
+The GitHub releases page also provides, for every version:
+
+- An RPM package (Fedora/RHEL) with a systemd service — see "Running as a
+  Service" below.
+- A Debian package (`syslogcef_X.Y.Z-1_all.deb`) with the same systemd
+  service: `sudo apt install ./syslogcef_X.Y.Z-1_all.deb`.
+- An Alpine APK with an OpenRC service:
+  `apk add --allow-untrusted syslogcef-X.Y.Z-r0.apk` (or install the
+  signing key from [packaging/apk/syslogcef.rsa.pub](packaging/apk/syslogcef.rsa.pub)
+  into `/etc/apk/keys/` first to verify).
+- A standalone executable (`syslogcef-X.Y.Z.pyz`) that runs on any system
+  with Python 3.9+: `chmod +x syslogcef-X.Y.Z.pyz && ./syslogcef-X.Y.Z.pyz`.
+- A source zip and sdist/wheel files.
+
+Every asset ships with a detached GPG signature (`.asc`) and is listed in
+a signed `SHA256SUMS` file; RPMs additionally carry embedded `rpmsign`
+signatures. The public key is committed at
+[packaging/rpm/RPM-GPG-KEY-syslogcef](packaging/rpm/RPM-GPG-KEY-syslogcef).
 
 ## Command Line Usage
 
@@ -140,7 +156,9 @@ for the full CEF extension dictionary.
 
 ## Running as a Service
 
-The RPM package installs a systemd unit and an environment file:
+The RPM and Debian packages install a systemd unit and an environment
+file (the Alpine APK installs the equivalent OpenRC service with its
+configuration in `/etc/conf.d/syslogcef`):
 
 - `/etc/syslogcef/syslogcef.conf` — input file, output file, and extra
   arguments for the converter.
