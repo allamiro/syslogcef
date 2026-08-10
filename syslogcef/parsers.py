@@ -96,7 +96,7 @@ CISCO_SEQ_RE = re.compile(
     r"(?P<month>[A-Z][a-z]{2})\s+"
     r"(?P<day>\d{1,2})\s+"
     r"(?:(?P<year>\d{4})\s+)?"
-    r"(?P<time>\d{2}:\d{2}:\d{2})(?:\.\d+)?"
+    r"(?P<time>\d{2}:\d{2}:\d{2})(?P<frac>\.\d+)?"
     r"(?:\s+[A-Z]{3,4})?:\s+"
     r"(?P<msg>%[A-Z].*)$"
 )
@@ -369,10 +369,11 @@ def parse_cisco_seq(line: str, *, now: Optional[datetime]) -> ParsedEvent | None
     facility, severity = convert_pri(pri)
     month = month_abbr_to_int(gd["month"])
     hour, minute, second = map(int, gd["time"].split(":"))
+    microsecond = int(float(gd["frac"]) * 1_000_000) if gd.get("frac") else 0
     if gd.get("year"):
-        ts = datetime(int(gd["year"]), month, int(gd["day"]), hour, minute, second, tzinfo=timezone.utc)
+        ts = datetime(int(gd["year"]), month, int(gd["day"]), hour, minute, second, microsecond, tzinfo=timezone.utc)
     else:
-        ts = _infer_timestamp(month, int(gd["day"]), gd["time"], now=now)
+        ts = _infer_timestamp(month, int(gd["day"]), gd["time"], now=now).replace(microsecond=microsecond)
     sd = {"cisco.sequence": gd["seq"]} if gd.get("seq") else {}
     return ParsedEvent(
         pri=pri,
@@ -444,6 +445,18 @@ def parse_kv_stream(line: str) -> ParsedEvent | None:
             ts = parse_iso8601(pairs["eventtime"][:16])
         except ValueError:
             ts = None
+    if ts is not None and ts.tzinfo is None:
+        # Apply a numeric offset supplied in the record (tz="-0500");
+        # named zones (timezone="CEST") cannot be resolved portably.
+        offset_match = re.fullmatch(
+            r"([+-])(\d{2}):?(\d{2})", pairs.get("tz") or pairs.get("timezone") or ""
+        )
+        if offset_match:
+            sign = 1 if offset_match.group(1) == "+" else -1
+            delta = timedelta(
+                hours=int(offset_match.group(2)), minutes=int(offset_match.group(3))
+            )
+            ts = ts.replace(tzinfo=timezone(sign * delta))
 
     host = (
         pairs.get("devname")

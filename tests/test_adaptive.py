@@ -135,3 +135,57 @@ def test_garbage_still_falls_back_to_unknown():
     ev2 = parse_syslog("<30>still garbage but with a pri")
     assert ev2.source_hint == "unknown"
     assert ev2.pri == 30
+
+
+# --- fixes from code review of the adaptive parsing PR -------------------------
+
+def test_kv_without_id_falls_back_to_nonempty_event_class():
+    line = '<30>device="SFW" date=2020-05-18 time=14:38:48 device_name="XG230" reason="x" a=1'
+    cef = convert_line(line)
+    header_fields = fields(cef)
+    assert header_fields[4] != ""  # eventClassId never empty
+
+
+def test_kv_numeric_timezone_applied():
+    line = 'date=2020-04-23 time=12:32:48 devname="fw1" logid="0100000001" tz="-0500" x=1'
+    ev = parse_syslog(line)
+    assert ev.ts.utcoffset().total_seconds() == -5 * 3600
+
+
+def test_cisco_milliseconds_preserved():
+    line = "000123: Feb  8 04:00:47.272: %SEC-6-IPACCESSLOGP: list 100 denied tcp"
+    ev = parse_syslog(line)
+    assert ev.ts.microsecond == 272000
+
+
+def test_adaptive_mon_day_year_rollover():
+    import re
+    from datetime import datetime, timezone
+
+    from syslogcef.adaptive import TIMESTAMP_LIB
+
+    src, conv = next((s, c) for n, s, c in TIMESTAMP_LIB if n == "mon_day")
+    match = re.compile(src).match("Dec 31 23:59:59")
+    ts = conv(match, datetime(2026, 1, 2, tzinfo=timezone.utc))
+    assert ts.year == 2025
+
+
+def test_adaptive_cached_host_revalidated():
+    clear_cache()
+    good = "2021/05/01 10:00:00 fw-edge-01 session established"
+    bad = "2021/05/02 11:00:00 ERROR link down"
+    ev1 = parse_syslog(good)
+    assert ev1.host == "fw-edge-01"
+    ev2 = parse_syslog(bad)
+    assert ev2.source_hint == "adaptive"
+    assert ev2.host is None
+    assert ev2.msg.startswith("ERROR")
+
+
+def test_adaptive_cached_empty_message_preserved():
+    clear_cache()
+    ev1 = parse_syslog("2021/05/01 10:00:00 fw-edge-01 something happened")
+    assert ev1.msg == "something happened"
+    ev2 = parse_syslog("2021/05/02 11:00:00 fw-edge-02")
+    assert ev2.host == "fw-edge-02"
+    assert ev2.msg == ""
