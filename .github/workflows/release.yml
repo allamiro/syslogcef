@@ -78,9 +78,13 @@ jobs:
           cp dist/syslogcef-*.tar.gz "$HOME/rpmbuild/SOURCES/"
           cp packaging/rpm/syslogcef.service packaging/rpm/syslogcef.conf "$HOME/rpmbuild/SOURCES/"
           # Resolve the dynamically generated build requirements
-          # (%pyproject_buildrequires), then do the real build.
+          # (%pyproject_buildrequires), then do the real build. When every
+          # requirement is already installed, rpmbuild -br succeeds without
+          # emitting a buildreqs package, so only run builddep if one exists.
           rpmbuild -br packaging/rpm/syslogcef.spec || true
-          dnf builddep -y "$HOME"/rpmbuild/SRPMS/syslogcef-*.buildreqs.nosrc.rpm
+          if ls "$HOME"/rpmbuild/SRPMS/syslogcef-*.buildreqs.nosrc.rpm >/dev/null 2>&1; then
+            dnf builddep -y "$HOME"/rpmbuild/SRPMS/syslogcef-*.buildreqs.nosrc.rpm
+          fi
           rpmbuild -ba packaging/rpm/syslogcef.spec
           mkdir -p rpms
           cp "$HOME"/rpmbuild/RPMS/noarch/syslogcef-*.rpm rpms/
