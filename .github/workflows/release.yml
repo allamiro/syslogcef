@@ -60,7 +60,9 @@ jobs:
       - name: Install build tools
         run: |
           dnf install -y rpm-build rpmdevtools rpm-sign gnupg2 git \
+            dnf5-plugins \
             python3-devel python3-build python3-pip \
+            python3-setuptools python3-wheel \
             pyproject-rpm-macros systemd-rpm-macros
 
       - uses: actions/checkout@v4
@@ -75,6 +77,10 @@ jobs:
           rpmdev-setuptree
           cp dist/syslogcef-*.tar.gz "$HOME/rpmbuild/SOURCES/"
           cp packaging/rpm/syslogcef.service packaging/rpm/syslogcef.conf "$HOME/rpmbuild/SOURCES/"
+          # Resolve the dynamically generated build requirements
+          # (%pyproject_buildrequires), then do the real build.
+          rpmbuild -br packaging/rpm/syslogcef.spec || true
+          dnf builddep -y "$HOME"/rpmbuild/SRPMS/syslogcef-*.buildreqs.nosrc.rpm
           rpmbuild -ba packaging/rpm/syslogcef.spec
           mkdir -p rpms
           cp "$HOME"/rpmbuild/RPMS/noarch/syslogcef-*.rpm rpms/
