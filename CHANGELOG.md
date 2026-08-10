@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-08-11
+
+### Added
+
+- Network input: `--listen udp:PORT` / `tcp:PORT` turns syslogcef into a
+  syslog receiver feeding the conversion pipeline directly.
+- Network output: `--send udp://HOST:PORT`, `tcp://HOST:PORT` (with
+  reconnect and backoff), or `kafka://BROKER:PORT/TOPIC` (via
+  `pip install syslog2cef[kafka]`); `--eps` rate-limits forwarding.
+  Combinable with `--output` and `--listen` for a complete
+  receive-convert-forward daemon.
+- CEF validation: `--validate` checks extensions against the ArcSight
+  dictionary (types, lengths, IP/MAC/port/timestamp formats) and warns;
+  `--strict` fails on violations. Also available via the API
+  (`convert_line(..., validate=True, strict=True)`).
+- Comprehensive syslogcef(1) man page covering every option with eight
+  examples.
+- The systemd unit carries CAP_NET_BIND_SERVICE so port 514 can be
+  bound without root; the service config documents network daemon mode.
+
+### Fixed
+
+- Empty CEF header slots are no longer possible: header templates that
+  resolve empty fall back to the default mapping template.
+- kv timestamps honor numeric `tz=` offsets; native Cisco timestamps
+  keep milliseconds; adaptive month-day timestamps use year-rollover
+  inference; cached adaptive patterns revalidate host candidates and
+  preserve empty messages.
+
 ## [0.1.2] - 2026-08-11
 
 Validated against all 543 filebeat module test logs from elastic/beats
@@ -75,7 +104,8 @@ Initial release.
 - `--tail` now follows all given input files instead of blocking on the
   first one.
 
-[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/allamiro/syslogcef/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/allamiro/syslogcef/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/allamiro/syslogcef/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/allamiro/syslogcef/releases/tag/v0.1.0

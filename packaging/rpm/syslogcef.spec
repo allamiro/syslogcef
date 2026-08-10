@@ -1,5 +1,5 @@
 Name:           syslogcef
-Version:        0.1.2
+Version:        0.1.3
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -67,6 +67,12 @@ install -D -m 0644 %{SOURCE3} %{buildroot}%{_mandir}/man1/syslogcef.1
 %config(noreplace) %{_sysconfdir}/syslogcef/syslogcef.conf
 
 %changelog
+* Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.1.3-1
+- Receive syslog over the network (--listen udp/tcp)
+- Forward CEF to a SIEM (--send udp/tcp, optional kafka) with --eps
+- Validate CEF extensions against the ArcSight dictionary
+- Comprehensive man page; unit gains CAP_NET_BIND_SERVICE
+
 * Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.1.2-1
 - Parse RFC3164 timestamps with a year (real Cisco ASA/FTD format)
 - Parse hosts with trailing or standalone colons
