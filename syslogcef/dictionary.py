@@ -21,18 +21,22 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
-from pathlib import Path
+from importlib import resources
 from typing import Dict, FrozenSet, Tuple
-
-_DICTIONARY_PATH = Path(__file__).parent / "dictionary.json"
 
 
 @lru_cache(maxsize=1)
 def _load() -> dict:
-    with _DICTIONARY_PATH.open(encoding="utf-8") as fp:
+    # importlib.resources, not a filesystem path: the package also runs
+    # from the standalone zipapp, where package files are inside the
+    # archive and Path(__file__)-style access fails (mappings/__init__.py
+    # uses the same mechanism for the same reason).
+    with resources.files("syslogcef").joinpath("dictionary.json").open(
+        "r", encoding="utf-8"
+    ) as fp:
         data = json.load(fp)
     if not isinstance(data.get("keys"), dict) or not isinstance(data.get("aliases"), dict):
-        raise ValueError(f"{_DICTIONARY_PATH}: expected 'keys' and 'aliases' objects")
+        raise ValueError("dictionary.json: expected 'keys' and 'aliases' objects")
     return data
 
 

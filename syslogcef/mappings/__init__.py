@@ -17,7 +17,7 @@ __all__ = [
 
 
 def _load(name: str) -> Mapping[str, Any]:
-    with resources.files(__package__).joinpath(f"{name}.json").open("r", encoding="utf-8") as fp:
+    with resources.files("syslogcef.mappings").joinpath(f"{name}.json").open("r", encoding="utf-8") as fp:
         return json.load(fp)
 
 
