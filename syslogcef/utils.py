@@ -38,6 +38,7 @@ SEVERITY_WORDS = {
     "debug": 7,
 }
 UTF8_REPLACEMENT_CHAR = "\uFFFD"
+_NUL = "\x00"
 
 
 def month_abbr_to_int(abbr: str) -> int:
@@ -140,8 +141,12 @@ def flatten_dict(prefix: str, data: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def cef_escape(value: str) -> str:
+    # Strip NUL here, not only in msg: the raw event reaches cs1
+    # unsanitized, and an embedded NUL truncates or confuses downstream
+    # CEF consumers that treat records as C strings.
     return (
-        value.replace("\\", "\\\\")
+        value.replace(_NUL, UTF8_REPLACEMENT_CHAR)
+        .replace("\\", "\\\\")
         .replace("|", "\\|")
         .replace("=", "\\=")
         .replace("\r", "\\r")
@@ -151,7 +156,8 @@ def cef_escape(value: str) -> str:
 
 def cef_escape_header(value: str) -> str:
     return (
-        value.replace("\\", "\\\\")
+        value.replace(_NUL, UTF8_REPLACEMENT_CHAR)
+        .replace("\\", "\\\\")
         .replace("|", "\\|")
         .replace("\r", " ")
         .replace("\n", " ")
