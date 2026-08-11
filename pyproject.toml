@@ -29,6 +29,9 @@ test = [
 kafka = [
   "kafka-python>=2.0",
 ]
+fuzz = [
+  "hypothesis>=6",
+]
 
 [project.scripts]
 syslogcef = "syslogcef.cli:main"
