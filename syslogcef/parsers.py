@@ -129,12 +129,30 @@ def _infer_timestamp(month: int, day: int, time_str: str, *, now: Optional[datet
     if now is None:
         now = datetime.now(timezone.utc)
     hour, minute, second = map(int, time_str.split(":"))
-    candidate = now.replace(month=month, day=day, hour=hour, minute=minute, second=second, microsecond=0)
+
+    def build(year: int) -> Optional[datetime]:
+        try:
+            return now.replace(
+                year=year, month=month, day=day,
+                hour=hour, minute=minute, second=second, microsecond=0,
+            )
+        except ValueError:  # Feb 29 in a non-leap year
+            return None
+
+    candidate = build(now.year)
+    if candidate is None:
+        # A yearless Feb 29 line in a non-leap runtime year must not
+        # crash the parser: pick the occurrence closest in time (not
+        # merely the first leap year found in either direction).
+        candidates = [c for off in range(-4, 5) if off and (c := build(now.year + off))]
+        if not candidates:
+            raise ValueError(f"impossible calendar date: month={month} day={day}")
+        return min(candidates, key=lambda c: abs(c - now))
     # Handle rollover into previous year.
     if candidate - now > timedelta(days=180):
-        candidate = candidate.replace(year=now.year - 1)
+        candidate = build(now.year - 1) or candidate
     elif now - candidate > timedelta(days=180):
-        candidate = candidate.replace(year=now.year + 1)
+        candidate = build(now.year + 1) or candidate
     return candidate
 
 
@@ -232,12 +250,33 @@ def parse_rsyslog_json(line: str) -> ParsedEvent | None:
     pri = data.get("pri") or data.get("syslogpriority")
     pri = int(pri) if pri is not None else None
     facility, severity = convert_pri(pri)
-    timestamp = data.get("timestamp") or data.get("timegenerated")
-    ts = parse_iso8601(timestamp) if timestamp else None
+    # Each alias is tried independently: an invalid value in an earlier
+    # key must not mask a valid one in a later key.
+    ts = None
+    timestamp = ""
+    for ts_key in ("timestamp", "timegenerated", "@timestamp", "timereported"):
+        raw_ts = data.get(ts_key)
+        if not raw_ts:
+            continue
+        if not timestamp:
+            timestamp = str(raw_ts)  # first present value, for ts_orig
+        try:
+            ts = parse_iso8601(raw_ts)
+            timestamp = str(raw_ts)
+            break
+        except (ValueError, OverflowError, OSError):
+            continue
+    # JSON values may be any scalar (e.g. "message": 123); coerce to str
+    # so downstream sanitization/slicing never sees a non-string.
     host = data.get("hostname") or data.get("host")
+    host = str(host) if host is not None else None
     app = data.get("app-name") or data.get("programname")
+    app = str(app) if app is not None else None
+    if app is None and isinstance(data.get("syslogtag"), str):
+        # "nginx:" or "app[123]:" -> "nginx" / "app"
+        app = data["syslogtag"].rstrip(":").split("[")[0] or None
     pid = data.get("procid") or data.get("pid")
-    msg = data.get("msg") or data.get("message") or ""
+    msg = str(data.get("msg") or data.get("message") or "")
     sd = {k: v for k, v in data.items() if isinstance(k, str) and k.startswith("structured-data")}
     return ParsedEvent(
         pri=pri,
@@ -281,20 +320,59 @@ def parse_rsyslog_file(line: str) -> ParsedEvent | None:
     )
 
 
+# A JSON object must carry at least one journald-style key to be claimed
+# by this parser; otherwise generic JSON (e.g. rsyslog's @timestamp/host
+# shape) would be swallowed into an all-empty event instead of falling
+# through to the rsyslog parser.
+_JOURNALD_NATIVE_KEYS = (
+    "MESSAGE",
+    "__REALTIME_TIMESTAMP",
+    "_HOSTNAME",
+    "SYSLOG_IDENTIFIER",
+    "_PID",
+    "PRIORITY",
+)
+# Every lowercase alias the parser body reads must also gate, or explicit
+# --mode journald_json rejects records it can parse.
+_JOURNALD_ALIAS_KEYS = ("timestamp", "hostname", "app-name", "priority", "pid", "msg")
+# Keys only rsyslog emits: a record matched purely via the lowercase
+# aliases but carrying one of these belongs to parse_rsyslog_json, which
+# reads fields (message, programname, ...) journald would drop.
+_RSYSLOG_MARKER_KEYS = (
+    "@timestamp",
+    "message",
+    "programname",
+    "syslogtag",
+    "timegenerated",
+    "timereported",
+    "syslogpriority",
+)
+
+
 def parse_journalctl_json(line: str) -> ParsedEvent | None:
     try:
         data = json.loads(line)
     except json.JSONDecodeError:
         return None
+    if not isinstance(data, dict):
+        return None
+    if not any(key in data for key in _JOURNALD_NATIVE_KEYS):
+        if not any(key in data for key in _JOURNALD_ALIAS_KEYS):
+            return None
+        if any(key in data for key in _RSYSLOG_MARKER_KEYS):
+            return None
     pri_raw = data.get("PRIORITY") or data.get("priority")
     pri = int(pri_raw) if pri_raw is not None else None
     facility, severity = convert_pri(pri)
     timestamp = data.get("__REALTIME_TIMESTAMP") or data.get("timestamp")
     ts = parse_iso8601(timestamp) if timestamp else None
+    # Coerce JSON scalars to str, as in parse_rsyslog_json.
     host = data.get("_HOSTNAME") or data.get("hostname")
+    host = str(host) if host is not None else None
     app = data.get("SYSLOG_IDENTIFIER") or data.get("app-name")
+    app = str(app) if app is not None else None
     pid = data.get("_PID") or data.get("pid")
-    msg = data.get("MESSAGE") or data.get("msg") or ""
+    msg = str(data.get("MESSAGE") or data.get("msg") or "")
     sd = JournalJSONMapping(data).to_structured_data()
     return ParsedEvent(
         pri=pri,
@@ -434,17 +512,46 @@ def parse_kv_stream(line: str) -> ParsedEvent | None:
     if len(pairs) < 3:
         return None
 
+    # Timestamp candidates in preference order, each falling through to
+    # the next when absent or unparseable (an invalid ts= must not mask
+    # a valid eventtime=). Overflow/OSError cover out-of-range epoch
+    # values, which must never abort explicit kv-mode processing.
+    # ts_orig records the candidate that actually parsed.
     ts = None
+    ts_orig = ""
     if pairs.get("date") and pairs.get("time"):
         try:
             ts = parse_iso8601(f"{pairs['date']}T{pairs['time']}")
-        except ValueError:
+            ts_orig = f"{pairs['date']} {pairs['time']}"
+        except (ValueError, OverflowError, OSError):
             ts = None
-    elif pairs.get("eventtime", "").isdigit():
+    if ts is None:
+        # Each ISO alias tried independently: an invalid ts= must not
+        # mask a valid timestamp= or datetime=.
+        for iso_key in ("ts", "timestamp", "datetime"):
+            raw_iso = pairs.get(iso_key)
+            if not raw_iso:
+                continue
+            try:
+                ts = parse_iso8601(raw_iso)
+                ts_orig = raw_iso
+                break
+            except (ValueError, OverflowError, OSError):
+                continue
+    if ts is None and pairs.get("eventtime", "").isdigit():
         try:
             ts = parse_iso8601(pairs["eventtime"][:16])
-        except ValueError:
+            ts_orig = pairs["eventtime"]
+        except (ValueError, OverflowError, OSError):
             ts = None
+    if not ts_orig:
+        ts_orig = (
+            f"{pairs.get('date', '')} {pairs.get('time', '')}".strip()
+            or pairs.get("ts")
+            or pairs.get("timestamp")
+            or pairs.get("datetime")
+            or ""
+        )
     if ts is not None and ts.tzinfo is None:
         # Apply a numeric offset supplied in the record (tz="-0500");
         # named zones (timezone="CEST") cannot be resolved portably.
@@ -456,7 +563,12 @@ def parse_kv_stream(line: str) -> ParsedEvent | None:
             delta = timedelta(
                 hours=int(offset_match.group(2)), minutes=int(offset_match.group(3))
             )
-            ts = ts.replace(tzinfo=timezone(sign * delta))
+            try:
+                ts = ts.replace(tzinfo=timezone(sign * delta))
+            except ValueError:
+                # tz=+24:00 and other out-of-range offsets: keep the
+                # naive timestamp rather than dropping the event.
+                pass
 
     host = (
         pairs.get("devname")
@@ -470,7 +582,7 @@ def parse_kv_stream(line: str) -> ParsedEvent | None:
         facility=facility,
         severity=severity,
         ts=ts,
-        ts_orig=f"{pairs.get('date', '')} {pairs.get('time', '')}".strip(),
+        ts_orig=ts_orig,
         host=host,
         app=pairs.get("type") or pairs.get("log_type"),
         pid=None,

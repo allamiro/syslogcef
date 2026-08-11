@@ -22,7 +22,7 @@ jobs:
         id: fuzz
         env:
           SYSLOGCEF_HYPOTHESIS_PROFILE: deep
-        run: pytest tests/test_fuzz_properties.py -v
+        run: pytest tests/test_fuzz_properties.py tests/test_fuzz_grammar.py -v
       - name: Upload failure reproduction database
         # Only when the fuzz step itself failed (not e.g. pip install),
         # so the .hypothesis directory is guaranteed to exist.

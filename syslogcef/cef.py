@@ -69,11 +69,26 @@ class MappingResolver:
         severity_map = {**DEFAULT_MAPPING["severity_map"], **self.mapping.get("severity_map", {})}
         value = fields.get("severity")
         if value is None and "pri" in fields:
-            _, severity_value = divmod(int(fields.get("pri", 0)), 8)
-            value = severity_value
+            # "pri" may come from an untrusted kv pair (pri=zzz), not just
+            # a parsed <PRI> header; garbage must not abort the pipeline.
+            try:
+                _, value = divmod(int(fields.get("pri", 0)), 8)
+            except (TypeError, ValueError):
+                value = None
         if value is None:
             return "3"
-        return severity_map.get(str(value), str(value))
+        mapped = str(severity_map.get(str(value), value))
+        # The CEF:0 header severity slot must be numeric 0-10; anything
+        # else (non-numeric kv severity, bad severity_map value) falls
+        # back to the default rather than corrupting the header. ASCII
+        # check required: str.isdigit() accepts Unicode digits like "²"
+        # that int() rejects.
+        # Length guard first: int() on a multi-thousand-digit string hits
+        # Python 3.11+'s integer-conversion limit and raises. Valid CEF
+        # severities are at most two characters ("10").
+        if not (mapped.isascii() and mapped.isdigit() and len(mapped) <= 2) or int(mapped) > 10:
+            return "3"
+        return mapped
 
     def resolve_raw_extensions(self, fields: Mapping[str, Any]) -> Dict[str, str]:
         raw = {}
