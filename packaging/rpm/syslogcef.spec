@@ -1,5 +1,5 @@
 Name:           syslogcef
-Version:        0.2.0
+Version:        0.2.1
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -81,6 +81,10 @@ install -D -m 0644 %{SOURCE6} %{buildroot}%{_sysconfdir}/logrotate.d/syslogcef
 %config(noreplace) %{_sysconfdir}/logrotate.d/syslogcef
 
 %changelog
+* Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.2.1-1
+- Fix zipapp package-data loading (dictionary.json path, Python 3.9
+  zipimport anchor); add a zipimport regression test
+
 * Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.2.0-1
 - Add the CEF field dictionary: 176 keys with producer/consumer scopes
   and 56 source-field aliases applied during normalization

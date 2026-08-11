@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-11
+
+### Fixed
+
+- The standalone zipapp works again — and for the first time actually
+  works on Python 3.9: `dictionary.json` was read via a filesystem path
+  (broke the v0.2.0 `.pyz` build), and the mapping loader anchored
+  `importlib.resources` on `__package__`, which is None under Python
+  3.9's legacy zipimport. Both loaders use explicit package anchors,
+  and a regression test imports the package from inside a zip archive.
+
 ## [0.2.0] - 2026-08-11
 
 ### Added
@@ -229,7 +240,8 @@ Initial release.
 - `--tail` now follows all given input files instead of blocking on the
   first one.
 
-[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/allamiro/syslogcef/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/allamiro/syslogcef/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/allamiro/syslogcef/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/allamiro/syslogcef/compare/v0.1.4...v0.1.5
