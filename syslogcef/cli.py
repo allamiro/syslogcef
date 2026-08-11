@@ -160,8 +160,9 @@ def main(argv: Optional[list[str]] = None) -> int:
             for cef in outputs:
                 sender.send(cef)
         else:
+            stream_flush = bool(args.tail or args.listen)
             for cef in outputs:
-                print(cef)
+                print(cef, flush=stream_flush)
     except CEFValidationError as exc:
         print(f"syslogcef: strict validation failed: {exc}", file=sys.stderr)
         return 1

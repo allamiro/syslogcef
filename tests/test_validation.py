@@ -8,7 +8,7 @@ from syslogcef.validation import CEFValidationError, validate_extensions
 
 def test_valid_extensions_produce_no_fatal_findings():
     findings = validate_extensions(
-        {"src": "10.0.0.1", "dst": "2001:db8::1", "spt": "443", "msg": "hello", "smac": "00:0d:60:af:1b:61"}
+        {"src": "10.0.0.1", "dst": "10.0.0.2", "c6a1": "2001:db8::1", "spt": "443", "msg": "hello", "smac": "00:0d:60:af:1b:61"}
     )
     assert [f for f in findings if f.fatal] == []
 
@@ -64,3 +64,26 @@ def test_cli_strict_exits_nonzero(tmp_path):
     )
     assert result.returncode == 1
     assert b"strict validation failed" in result.stderr
+
+
+# --- round-2 review findings --------------------------------------------------
+
+def test_ipv4_only_fields_reject_ipv6():
+    findings = validate_extensions({"src": "2001:db8::1", "c6a1": "2001:db8::1"})
+    fatal = [f.key for f in findings if f.fatal]
+    assert fatal == ["src"]
+
+
+def test_old_file_keys_validated():
+    findings = validate_extensions({"oldFileSize": "not-a-number", "oldFileHash": "abc"})
+    fatal = [f.key for f in findings if f.fatal]
+    assert fatal == ["oldFileSize"]
+
+
+def test_timestamp_values_actually_parsed():
+    bad = validate_extensions({"rt": "Foo 99 2020 99:99:99"})
+    assert bad and bad[0].fatal
+    bad2 = validate_extensions({"rt": "123"})  # implausible epoch
+    assert bad2 and bad2[0].fatal
+    ok = validate_extensions({"rt": "Feb 29 2020 12:00:00"})
+    assert [f for f in ok if f.fatal] == []
