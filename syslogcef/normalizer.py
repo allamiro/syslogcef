@@ -82,10 +82,16 @@ def normalize(event: ParsedEvent) -> NormalizedEvent:
 
 
 def _derive_common_fields(event: NormalizedEvent) -> None:
-    if "src" not in event.kv and "src_ip" in event.kv:
-        event.kv.setdefault("src", event.kv["src_ip"])
-    if "dst" not in event.kv and "dst_ip" in event.kv:
-        event.kv.setdefault("dst", event.kv["dst_ip"])
+    # Canonicalize field names via the shared dictionary (srcip -> src,
+    # dstport -> dpt, user -> suser, ...). This runs for every event —
+    # including kv pairs extracted from adaptive-parsed lines — so
+    # mappings and validation always see canonical CEF keys. Original
+    # keys are kept; an existing canonical key is never overwritten.
+    from .dictionary import field_aliases
+
+    for alias, canonical in field_aliases().items():
+        if canonical not in event.kv and alias in event.kv:
+            event.kv[canonical] = event.kv[alias]
 
     if "event_code" not in event.kv:
         code = _extract_event_code(event.msg)

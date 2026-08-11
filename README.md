@@ -178,6 +178,29 @@ Field templates that reference missing keys resolve to an empty string
 rather than failing the event. See [docs/cef_fields.md](docs/cef_fields.md)
 for the full CEF extension dictionary.
 
+## Field Dictionary
+
+`syslogcef/dictionary.json` is the single source of truth for CEF field
+knowledge, derived from the ArcSight Extension Dictionary (see
+[docs/cef_fields.md](docs/cef_fields.md)):
+
+- **Key metadata** — data type, maximum length, and producer/consumer
+  scope for every CEF key. `--validate`/`--strict` check types and
+  lengths from it, and warn (without failing) when producer output sets
+  a consumer-side key such as `rawEvent`.
+- **Field aliases** — common source-log names mapped to canonical CEF
+  keys: `srcip`/`source_ip` → `src`, `dstport` → `dpt`, `user` →
+  `suser`, `rcvdbyte` → `in`, `action` → `act`, and ~50 more. Aliases
+  are applied during normalization for **every** event — including
+  key=value pairs extracted from adaptively-parsed unknown formats — so
+  mappings and validation always see canonical names. Original keys are
+  preserved and an explicit canonical key is never overwritten.
+
+This means a Fortinet-style `srcip=10.1.1.1 dstport=443` and an unknown
+device emitting the same pairs behind an unrecognized prefix both end up
+with `src` and `dpt` available to mapping templates, with no per-device
+configuration.
+
 ## Custom Parsers
 
 When a device emits a format no built-in parser handles, add your own
