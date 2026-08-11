@@ -3,6 +3,34 @@
 The following tables list the CEF key names defined for event producers and
 consumers. They are derived from the ArcSight Extension Dictionary.
 
+## Notes from the specification
+
+- **Producers vs. consumers**: the keys in the Event Consumers table are
+  set by the receiving side (ArcSight connectors) and *must not be set by
+  event producers*. Producers wanting to carry such data use the custom
+  fields with a label (e.g. `cs1` + `cs1Label`), as syslogcef's bundled
+  mappings do for the raw event text.
+- **Version differences**: in CEF 0.1, `in`/`out` (bytesIn/bytesOut) are
+  Integer and all IP address fields are IPv4-only; from CEF 1.0 onward
+  they accept Long values and IPv6 addresses respectively. Note the
+  `CEF:0` wire prefix does not by itself select a dictionary version —
+  integrations on the 1.x dictionary still emit `CEF:0` headers.
+  syslogcef *chooses* to validate against the conservative rules for
+  broadest consumer compatibility: `--validate`/`--strict` enforce the
+  0.x IP rule (IPv6 belongs in `c6a1`–`c6a4`) while accepting Long for
+  `in`/`out`, matching what validation.py implements.
+- **Wire format**: header fields are separated by `|` and ordered
+  `CEF:version|vendor|product|deviceVersion|eventClassId|name|severity|`
+  followed by space-separated `key=value` extensions. When sending
+  events, only the short CEF key name is valid — using the full name
+  fails.
+
+Sample record (Symantec Threat Isolation, abridged):
+
+```text
+CEF:0|Symantec|Threat Isolation|1.0|Network Request|Network Request|6|rt=Jun 03 2018 12:40:48 src=10.0.80.80 dst=80.249.99.148 dpt=80 request=https://usermatch.krxd.net/um/v2?partner\=vdna requestMethod=GET app=http act=Isolate dvchost=fireglass1 cn2=200 cn2Label=Response Status Code cs4=Technology/Internet cs4Label=URL Categories
+```
+
 ## Event Producers
 
 | CEF Version | Key | Full Name | Data Type | Length | Meaning |
