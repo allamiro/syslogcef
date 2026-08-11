@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The built-in fallback mapping carries the raw line as `cs1` +
+  `cs1Label=rawEvent` (like every bundled mapping) instead of setting
+  the consumer-only `rawEvent` key, per the ArcSight dictionary rule
+  that producers must not set consumer-side fields. Downstream content
+  keyed on `rawEvent=` in default-mapped output must read `cs1=`.
+- `--validate`/`--strict` warn (non-fatally) when producer output sets
+  a consumer-side CEF key; field types/lengths/scopes and ~56 source
+  field aliases (srcip -> src, dstport -> dpt, ...) now live in a
+  shared `dictionary.json` consulted by validation and normalization,
+  including for adaptively-parsed events.
+
 ## [0.1.6] - 2026-08-11
 
 ### Fixed

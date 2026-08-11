@@ -4,12 +4,14 @@
 pip3 install .
 
 # PyInstaller (inside compile_python_fuzzer) only bundles Python modules;
-# the mapping JSON data files must be added explicitly or the packaged
+# package data files (mapping JSON, dictionary.json) must be added or the
 # fuzzer dies on startup with FileNotFoundError: cisco_asa.json.
-mappings_dir=$(python3 -c "import os, syslogcef.mappings as m; print(os.path.dirname(m.__file__))")
+pkg_dir=$(python3 -c "import os, syslogcef; print(os.path.dirname(syslogcef.__file__))")
 
 for fuzzer in fuzz/fuzz_*.py; do
-  compile_python_fuzzer "$fuzzer" --add-data "$mappings_dir:syslogcef/mappings"
+  compile_python_fuzzer "$fuzzer" \
+    --add-data "$pkg_dir/mappings:syslogcef/mappings" \
+    --add-data "$pkg_dir/dictionary.json:syslogcef"
 done
 
 for fuzzer in fuzz/fuzz_*.py; do

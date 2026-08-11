@@ -1,0 +1,943 @@
+{
+  "_comment": "Single source of truth for CEF extension knowledge: key types/lengths/scopes (per the ArcSight Extension Dictionary, see docs/cef_fields.md) and source-field aliases applied during normalization.",
+  "aliases": {
+    "action": "act",
+    "bytes_in": "in",
+    "bytes_out": "out",
+    "daddr": "dst",
+    "dest_host": "dhost",
+    "dest_ip": "dst",
+    "dest_mac": "dmac",
+    "dest_port": "dpt",
+    "dest_user": "duser",
+    "destination_ip": "dst",
+    "destination_port": "dpt",
+    "destip": "dst",
+    "device_name": "dvchost",
+    "devicehostname": "dvchost",
+    "devname": "dvchost",
+    "dport": "dpt",
+    "dst_host": "dhost",
+    "dst_ip": "dst",
+    "dst_mac": "dmac",
+    "dst_port": "dpt",
+    "dst_user": "duser",
+    "dsthost": "dhost",
+    "dstip": "dst",
+    "dstmac": "dmac",
+    "dstport": "dpt",
+    "dstuser": "duser",
+    "file_name": "fname",
+    "file_size": "fsize",
+    "filename": "fname",
+    "ip_proto": "proto",
+    "protocol": "proto",
+    "rcvdbyte": "in",
+    "received_bytes": "in",
+    "saddr": "src",
+    "sent_bytes": "out",
+    "sentbyte": "out",
+    "source_host": "shost",
+    "source_ip": "src",
+    "source_mac": "smac",
+    "source_port": "spt",
+    "sourceip": "src",
+    "sport": "spt",
+    "src_host": "shost",
+    "src_ip": "src",
+    "src_mac": "smac",
+    "src_port": "spt",
+    "src_user": "suser",
+    "srchost": "shost",
+    "srcip": "src",
+    "srcmac": "smac",
+    "srcport": "spt",
+    "srcuser": "suser",
+    "url": "request",
+    "user": "suser",
+    "username": "suser",
+    "usr": "suser"
+  },
+  "keys": {
+    "act": {
+      "len": 63,
+      "scope": "producer",
+      "type": "str"
+    },
+    "agentDnsDomain": {
+      "len": 255,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "agentNtDomain": {
+      "len": 255,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "agentTranslatedAddress": {
+      "len": 0,
+      "scope": "consumer",
+      "type": "ip"
+    },
+    "agentTranslatedZoneExternalID": {
+      "len": 200,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "agentTranslatedZoneKey": {
+      "len": 0,
+      "scope": "producer",
+      "type": "long"
+    },
+    "agentTranslatedZoneURI": {
+      "len": 2048,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "agentZoneExternalID": {
+      "len": 200,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "agentZoneKey": {
+      "len": 0,
+      "scope": "producer",
+      "type": "long"
+    },
+    "agentZoneURI": {
+      "len": 2048,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "agt": {
+      "len": 0,
+      "scope": "consumer",
+      "type": "ip"
+    },
+    "ahost": {
+      "len": 1023,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "aid": {
+      "len": 40,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "amac": {
+      "len": 0,
+      "scope": "consumer",
+      "type": "mac"
+    },
+    "app": {
+      "len": 31,
+      "scope": "producer",
+      "type": "str"
+    },
+    "art": {
+      "len": 0,
+      "scope": "consumer",
+      "type": "ts"
+    },
+    "at": {
+      "len": 63,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "atz": {
+      "len": 255,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "av": {
+      "len": 31,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "c6a1": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ipv6"
+    },
+    "c6a1Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "c6a2": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ipv6"
+    },
+    "c6a2Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "c6a3": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ipv6"
+    },
+    "c6a3Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "c6a4": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ipv6"
+    },
+    "c6a4Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cat": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cfp1": {
+      "len": 0,
+      "scope": "producer",
+      "type": "float"
+    },
+    "cfp1Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cfp2": {
+      "len": 0,
+      "scope": "producer",
+      "type": "float"
+    },
+    "cfp2Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cfp3": {
+      "len": 0,
+      "scope": "producer",
+      "type": "float"
+    },
+    "cfp3Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cfp4": {
+      "len": 0,
+      "scope": "producer",
+      "type": "float"
+    },
+    "cfp4Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cn1": {
+      "len": 0,
+      "scope": "producer",
+      "type": "long"
+    },
+    "cn1Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cn2": {
+      "len": 0,
+      "scope": "producer",
+      "type": "long"
+    },
+    "cn2Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cn3": {
+      "len": 0,
+      "scope": "producer",
+      "type": "long"
+    },
+    "cn3Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cnt": {
+      "len": 0,
+      "scope": "producer",
+      "type": "int"
+    },
+    "cs1": {
+      "len": 4000,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cs1Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cs2": {
+      "len": 4000,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cs2Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cs3": {
+      "len": 4000,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cs3Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cs4": {
+      "len": 4000,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cs4Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cs5": {
+      "len": 4000,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cs5Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cs6": {
+      "len": 4000,
+      "scope": "producer",
+      "type": "str"
+    },
+    "cs6Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "customerExternalID": {
+      "len": 200,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "customerKey": {
+      "len": 0,
+      "scope": "producer",
+      "type": "long"
+    },
+    "customerURI": {
+      "len": 2048,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "dTranslatedZoneKey": {
+      "len": 0,
+      "scope": "producer",
+      "type": "long"
+    },
+    "dZoneKey": {
+      "len": 0,
+      "scope": "producer",
+      "type": "long"
+    },
+    "destinationDnsDomain": {
+      "len": 255,
+      "scope": "producer",
+      "type": "str"
+    },
+    "destinationServiceName": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "destinationTranslatedAddress": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ipv4"
+    },
+    "destinationTranslatedPort": {
+      "len": 0,
+      "scope": "producer",
+      "type": "port"
+    },
+    "destinationTranslatedZoneExternalID": {
+      "len": 200,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "destinationTranslatedZoneURI": {
+      "len": 2048,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "destinationZoneExternalID": {
+      "len": 200,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "destinationZoneURI": {
+      "len": 2048,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "deviceCustomDate1": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ts"
+    },
+    "deviceCustomDate1Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "deviceCustomDate2": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ts"
+    },
+    "deviceCustomDate2Label": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "deviceDirection": {
+      "len": 0,
+      "scope": "producer",
+      "type": "int"
+    },
+    "deviceDnsDomain": {
+      "len": 255,
+      "scope": "producer",
+      "type": "str"
+    },
+    "deviceExternalId": {
+      "len": 255,
+      "scope": "producer",
+      "type": "str"
+    },
+    "deviceFacility": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "deviceInboundInterface": {
+      "len": 128,
+      "scope": "producer",
+      "type": "str"
+    },
+    "deviceNtDomain": {
+      "len": 255,
+      "scope": "producer",
+      "type": "str"
+    },
+    "deviceOutboundInterface": {
+      "len": 128,
+      "scope": "producer",
+      "type": "str"
+    },
+    "devicePayloadId": {
+      "len": 128,
+      "scope": "producer",
+      "type": "str"
+    },
+    "deviceProcessName": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "deviceTranslatedAddress": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ipv4"
+    },
+    "deviceTranslatedZoneExternalID": {
+      "len": 200,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "deviceTranslatedZoneKey": {
+      "len": 0,
+      "scope": "producer",
+      "type": "long"
+    },
+    "deviceTranslatedZoneURI": {
+      "len": 2048,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "deviceZoneExternalID": {
+      "len": 200,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "deviceZoneKey": {
+      "len": 0,
+      "scope": "producer",
+      "type": "long"
+    },
+    "deviceZoneURI": {
+      "len": 2048,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "dhost": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "dlat": {
+      "len": 0,
+      "scope": "consumer",
+      "type": "float"
+    },
+    "dlong": {
+      "len": 0,
+      "scope": "consumer",
+      "type": "float"
+    },
+    "dmac": {
+      "len": 0,
+      "scope": "producer",
+      "type": "mac"
+    },
+    "dntdom": {
+      "len": 255,
+      "scope": "producer",
+      "type": "str"
+    },
+    "dpid": {
+      "len": 0,
+      "scope": "producer",
+      "type": "int"
+    },
+    "dpriv": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "dproc": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "dpt": {
+      "len": 0,
+      "scope": "producer",
+      "type": "port"
+    },
+    "dst": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ipv4"
+    },
+    "dtz": {
+      "len": 255,
+      "scope": "producer",
+      "type": "str"
+    },
+    "duid": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "duser": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "dvc": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ipv4"
+    },
+    "dvchost": {
+      "len": 100,
+      "scope": "producer",
+      "type": "str"
+    },
+    "dvcpid": {
+      "len": 0,
+      "scope": "producer",
+      "type": "int"
+    },
+    "end": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ts"
+    },
+    "eventId": {
+      "len": 0,
+      "scope": "consumer",
+      "type": "long"
+    },
+    "externalId": {
+      "len": 40,
+      "scope": "producer",
+      "type": "str"
+    },
+    "fileCreateTime": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ts"
+    },
+    "fileHash": {
+      "len": 255,
+      "scope": "producer",
+      "type": "str"
+    },
+    "fileId": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "fileModificationTime": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ts"
+    },
+    "filePath": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "filePermission": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "fileType": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "flexDate1": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ts"
+    },
+    "flexDate1Label": {
+      "len": 128,
+      "scope": "producer",
+      "type": "str"
+    },
+    "flexString1": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "flexString1Label": {
+      "len": 128,
+      "scope": "producer",
+      "type": "str"
+    },
+    "flexString2": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "flexString2Label": {
+      "len": 128,
+      "scope": "producer",
+      "type": "str"
+    },
+    "fname": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "frameworkName": {
+      "len": 256,
+      "scope": "producer",
+      "type": "str"
+    },
+    "fsize": {
+      "len": 0,
+      "scope": "producer",
+      "type": "int"
+    },
+    "in": {
+      "len": 0,
+      "scope": "producer",
+      "type": "long"
+    },
+    "msg": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "oldFileCreateTime": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ts"
+    },
+    "oldFileHash": {
+      "len": 255,
+      "scope": "producer",
+      "type": "str"
+    },
+    "oldFileId": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "oldFileModificationTime": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ts"
+    },
+    "oldFileName": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "oldFilePath": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "oldFilePermission": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "oldFileSize": {
+      "len": 0,
+      "scope": "producer",
+      "type": "int"
+    },
+    "oldFileType": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "out": {
+      "len": 0,
+      "scope": "producer",
+      "type": "long"
+    },
+    "outcome": {
+      "len": 63,
+      "scope": "producer",
+      "type": "str"
+    },
+    "proto": {
+      "len": 31,
+      "scope": "producer",
+      "type": "str"
+    },
+    "rawEvent": {
+      "len": 4000,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "reason": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "reportedDuration": {
+      "len": 0,
+      "scope": "producer",
+      "type": "long"
+    },
+    "reportedResourceGroupName": {
+      "len": 128,
+      "scope": "producer",
+      "type": "str"
+    },
+    "reportedResourceID": {
+      "len": 256,
+      "scope": "producer",
+      "type": "str"
+    },
+    "reportedResourceName": {
+      "len": 64,
+      "scope": "producer",
+      "type": "str"
+    },
+    "reportedResourceType": {
+      "len": 64,
+      "scope": "producer",
+      "type": "str"
+    },
+    "request": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "requestClientApplication": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "requestContext": {
+      "len": 2048,
+      "scope": "producer",
+      "type": "str"
+    },
+    "requestCookies": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "requestMethod": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "rt": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ts"
+    },
+    "sTranslatedZoneKey": {
+      "len": 0,
+      "scope": "producer",
+      "type": "long"
+    },
+    "sZoneKey": {
+      "len": 0,
+      "scope": "producer",
+      "type": "long"
+    },
+    "shost": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "slat": {
+      "len": 0,
+      "scope": "consumer",
+      "type": "float"
+    },
+    "slong": {
+      "len": 0,
+      "scope": "consumer",
+      "type": "float"
+    },
+    "smac": {
+      "len": 0,
+      "scope": "producer",
+      "type": "mac"
+    },
+    "sntdom": {
+      "len": 255,
+      "scope": "producer",
+      "type": "str"
+    },
+    "sourceDnsDomain": {
+      "len": 255,
+      "scope": "producer",
+      "type": "str"
+    },
+    "sourceServiceName": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "sourceTranslatedAddress": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ipv4"
+    },
+    "sourceTranslatedPort": {
+      "len": 0,
+      "scope": "producer",
+      "type": "port"
+    },
+    "sourceTranslatedZoneExternalID": {
+      "len": 200,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "sourceTranslatedZoneURI": {
+      "len": 2048,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "sourceZoneExternalID": {
+      "len": 200,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "sourceZoneURI": {
+      "len": 2048,
+      "scope": "consumer",
+      "type": "str"
+    },
+    "spid": {
+      "len": 0,
+      "scope": "producer",
+      "type": "int"
+    },
+    "spriv": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "sproc": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "spt": {
+      "len": 0,
+      "scope": "producer",
+      "type": "port"
+    },
+    "src": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ipv4"
+    },
+    "start": {
+      "len": 0,
+      "scope": "producer",
+      "type": "ts"
+    },
+    "suid": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "suser": {
+      "len": 1023,
+      "scope": "producer",
+      "type": "str"
+    },
+    "threatActor": {
+      "len": 40,
+      "scope": "producer",
+      "type": "str"
+    },
+    "threatAttackID": {
+      "len": 32,
+      "scope": "producer",
+      "type": "str"
+    },
+    "type": {
+      "len": 0,
+      "scope": "producer",
+      "type": "int"
+    }
+  }
+}

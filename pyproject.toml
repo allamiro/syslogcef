@@ -41,7 +41,7 @@ package-dir = {"" = "."}
 packages = ["syslogcef", "syslogcef.mappings"]
 
 [tool.setuptools.package-data]
-syslogcef = ["mappings/*.json"]
+syslogcef = ["mappings/*.json", "dictionary.json"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"

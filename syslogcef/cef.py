@@ -28,7 +28,11 @@ DEFAULT_MAPPING = {
     },
     "extensions": {
         "msg": "%(msg)s",
-        "rawEvent": "%(raw)s",
+        # The raw line travels in a labeled custom string: rawEvent is a
+        # consumer-side key producers must not set (see docs/cef_fields.md),
+        # and every bundled mapping already uses this shape.
+        "cs1Label": "rawEvent",
+        "cs1": "%(raw)s",
     },
 }
 
@@ -93,7 +97,15 @@ class MappingResolver:
     def resolve_raw_extensions(self, fields: Mapping[str, Any]) -> Dict[str, str]:
         raw = {}
         merged = DEFAULT_MAPPING["extensions"].copy()
-        merged.update(self.mapping.get("extensions", {}))
+        user_extensions = self.mapping.get("extensions", {})
+        # The default cs1/cs1Label pair is atomic: if a custom mapping
+        # touches either member, drop both defaults so a custom cs1 is
+        # not silently labeled "rawEvent" (nor a custom label attached
+        # to the default raw line).
+        if "cs1" in user_extensions or "cs1Label" in user_extensions:
+            merged.pop("cs1", None)
+            merged.pop("cs1Label", None)
+        merged.update(user_extensions)
         for key, template in merged.items():
             value = self._format(template, fields)
             if value:
