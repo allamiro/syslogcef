@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, Optional
 
 from .parsers import ParsedEvent, autodetect_and_parse
 from .normalizer import NormalizedEvent, normalize

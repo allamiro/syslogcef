@@ -9,5 +9,6 @@ LABEL org.opencontainers.image.title="syslogcef" \
 COPY . /src
 RUN pip install --no-cache-dir /src && rm -rf /src
 
-USER nobody
+# 65534 is "nobody"; numeric so runtimes can verify non-root (DL3066)
+USER 65534:65534
 ENTRYPOINT ["syslogcef"]
