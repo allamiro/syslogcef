@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 
 MAX_DATAGRAM = 65535
 
+# A TCP client that streams data without ever sending a newline must not be
+# able to grow its buffer without bound; connections exceeding this are
+# dropped.
+MAX_TCP_BUFFER = 1024 * 1024
+
 
 def parse_endpoint(spec: str) -> Tuple[str, str, int]:
     """Parse ``udp:514``, ``tcp:5514``, or ``udp:10.0.0.5:514``."""
@@ -119,6 +124,20 @@ def _listen_tcp(host, port, max_messages, ready_callback) -> Iterator[str]:
                         count += 1
                     continue
                 buffers[sock] += data
+                if len(buffers[sock]) > MAX_TCP_BUFFER and b"\n" not in buffers[sock]:
+                    peer = None
+                    try:
+                        peer = sock.getpeername()
+                    except OSError:
+                        pass
+                    logger.warning(
+                        "Dropping connection %s: %d bytes without a newline",
+                        peer, len(buffers[sock]),
+                    )
+                    sel.unregister(sock)
+                    sock.close()
+                    buffers.pop(sock, None)
+                    continue
                 while b"\n" in buffers[sock]:
                     raw, buffers[sock] = buffers[sock].split(b"\n", 1)
                     line = raw.decode("utf-8", "replace").rstrip("\r")
@@ -159,7 +178,11 @@ class RateLimiter:
         now = self._clock()
         if now < self._next:
             self._sleep(self._next - now)
-        self._next = max(self._next + self.interval, self._clock())
+            now = self._clock()
+        # Schedule the next slot one full interval after the later of the
+        # previous slot and now, so falling behind never permits
+        # back-to-back sends that exceed the configured rate.
+        self._next = max(self._next, now) + self.interval
 
 
 class SyslogSender:
@@ -225,6 +248,7 @@ class KafkaSender:
     def __init__(self, broker: str, topic: str, *, limiter: Optional[RateLimiter] = None, producer=None):
         self.topic = topic
         self.limiter = limiter
+        self._async_error: Optional[Exception] = None
         if producer is None:
             try:
                 from kafka import KafkaProducer
@@ -235,10 +259,21 @@ class KafkaSender:
             producer = KafkaProducer(bootstrap_servers=broker)
         self.producer = producer
 
+    def _record_error(self, exc: Exception) -> None:
+        logger.error("Kafka delivery failed: %s", exc)
+        self._async_error = exc
+
     def send(self, record: str) -> None:
+        if self._async_error is not None:
+            raise ConnectionError(
+                f"Kafka delivery previously failed: {self._async_error}"
+            )
         if self.limiter:
             self.limiter.wait()
-        self.producer.send(self.topic, record.encode("utf-8"))
+        future = self.producer.send(self.topic, record.encode("utf-8"))
+        add_errback = getattr(future, "add_errback", None)
+        if add_errback:
+            add_errback(self._record_error)
 
     def close(self) -> None:
         try:
@@ -247,13 +282,17 @@ class KafkaSender:
             close = getattr(self.producer, "close", None)
             if close:
                 close()
+        if self._async_error is not None:
+            raise ConnectionError(
+                f"Kafka delivery failed: {self._async_error}"
+            )
 
 
 def create_sender(url: str, *, eps: Optional[float] = None):
     """Create a sender from udp://host:port, tcp://host:port, or kafka://broker/topic."""
 
     parsed = urlparse(url)
-    limiter = RateLimiter(eps) if eps else None
+    limiter = RateLimiter(eps) if eps is not None else None
     if parsed.scheme in ("udp", "tcp"):
         if not parsed.hostname or not parsed.port:
             raise ValueError(f"Invalid send target {url!r}; expected {parsed.scheme}://HOST:PORT")

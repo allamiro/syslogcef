@@ -10,6 +10,11 @@ ExecStart=/usr/bin/syslogcef $INPUT_FILE --tail --append --output $OUTPUT_FILE $
 Restart=on-failure
 RestartSec=5
 LogsDirectory=syslogcef
+# Runs as root by default so arbitrary log files remain readable. To drop
+# privileges (recommended for pure network mode), override with e.g.:
+#   User=syslogcef
+#   SupplementaryGroups=adm
+# AmbientCapabilities keeps ports <1024 bindable for a non-root User=.
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 NoNewPrivileges=yes
 PrivateTmp=yes

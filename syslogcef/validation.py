@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+from datetime import datetime
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
@@ -31,23 +32,28 @@ CEF_KEYS: Dict[str, Tuple[str, int]] = {
     "c6a1": ("ipv6", 0), "c6a2": ("ipv6", 0), "c6a3": ("ipv6", 0), "c6a4": ("ipv6", 0),
     "c6a1Label": (_S, 1023), "c6a2Label": (_S, 1023), "c6a3Label": (_S, 1023), "c6a4Label": (_S, 1023),
     "destinationDnsDomain": (_S, 255), "destinationServiceName": (_S, 1023),
-    "destinationTranslatedAddress": ("ip", 0), "destinationTranslatedPort": ("port", 0),
+    "destinationTranslatedAddress": ("ipv4", 0), "destinationTranslatedPort": ("port", 0),
     "deviceDirection": ("int", 0), "deviceDnsDomain": (_S, 255),
     "deviceExternalId": (_S, 255), "deviceFacility": (_S, 1023),
     "deviceInboundInterface": (_S, 128), "deviceOutboundInterface": (_S, 128),
     "deviceNtDomain": (_S, 255), "devicePayloadId": (_S, 128),
-    "deviceProcessName": (_S, 1023), "deviceTranslatedAddress": ("ip", 0),
+    "deviceProcessName": (_S, 1023), "deviceTranslatedAddress": ("ipv4", 0),
     "deviceCustomDate1": ("ts", 0), "deviceCustomDate2": ("ts", 0),
     "deviceCustomDate1Label": (_S, 1023), "deviceCustomDate2Label": (_S, 1023),
     "dhost": (_S, 1023), "dmac": ("mac", 0), "dntdom": (_S, 255),
     "dpid": ("int", 0), "dpriv": (_S, 1023), "dproc": (_S, 1023),
-    "dpt": ("port", 0), "dst": ("ip", 0), "dtz": (_S, 255),
+    "dpt": ("port", 0), "dst": ("ipv4", 0), "dtz": (_S, 255),
     "duid": (_S, 1023), "duser": (_S, 1023),
-    "dvc": ("ip", 0), "dvchost": (_S, 100), "dvcpid": ("int", 0),
+    "dvc": ("ipv4", 0), "dvchost": (_S, 100), "dvcpid": ("int", 0),
     "end": ("ts", 0), "externalId": (_S, 40),
     "fileCreateTime": ("ts", 0), "fileHash": (_S, 255), "fileId": (_S, 1023),
     "fileModificationTime": ("ts", 0), "filePath": (_S, 1023),
     "filePermission": (_S, 1023), "fileType": (_S, 1023),
+    "oldFileCreateTime": ("ts", 0), "oldFileHash": (_S, 255),
+    "oldFileId": (_S, 1023), "oldFileModificationTime": ("ts", 0),
+    "oldFileName": (_S, 1023), "oldFilePath": (_S, 1023),
+    "oldFilePermission": (_S, 1023), "oldFileSize": ("int", 0),
+    "oldFileType": (_S, 1023),
     "flexDate1": ("ts", 0), "flexDate1Label": (_S, 128),
     "flexString1": (_S, 1023), "flexString1Label": (_S, 128),
     "flexString2": (_S, 1023), "flexString2Label": (_S, 128),
@@ -60,16 +66,15 @@ CEF_KEYS: Dict[str, Tuple[str, int]] = {
     "rt": ("ts", 0), "start": ("ts", 0),
     "shost": (_S, 1023), "smac": ("mac", 0), "sntdom": (_S, 255),
     "sourceDnsDomain": (_S, 255), "sourceServiceName": (_S, 1023),
-    "sourceTranslatedAddress": ("ip", 0), "sourceTranslatedPort": ("port", 0),
+    "sourceTranslatedAddress": ("ipv4", 0), "sourceTranslatedPort": ("port", 0),
     "spid": ("int", 0), "spriv": (_S, 1023), "sproc": (_S, 1023),
-    "spt": ("port", 0), "src": ("ip", 0),
+    "spt": ("port", 0), "src": ("ipv4", 0),
     "suid": (_S, 1023), "suser": (_S, 1023),
     "type": ("int", 0),
     "rawEvent": (_S, 4000),
 }
 
 MAC_RE = re.compile(r"^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$")
-TS_RE = re.compile(r"^[A-Z][a-z]{2} \d{2} \d{4} \d{2}:\d{2}:\d{2}$")
 
 
 class CEFValidationError(ValueError):
@@ -124,6 +129,10 @@ def _check(key: str, value: str) -> str | None:
         if not _is_ip(value):
             return f"expected an IP address, got {value!r}"
         return None
+    if kind == "ipv4":
+        if not _is_ip(value, 4):
+            return f"expected an IPv4 address (use c6a1-c6a4 for IPv6), got {value!r}"
+        return None
     if kind == "ipv6":
         if not _is_ip(value, 6):
             return f"expected an IPv6 address, got {value!r}"
@@ -134,10 +143,14 @@ def _check(key: str, value: str) -> str | None:
         return None
     if kind == "ts":
         if value.isdigit():
-            return None  # epoch milliseconds
-        if TS_RE.match(value):
-            return None
-        return f"expected 'MMM dd yyyy HH:mm:ss' or epoch milliseconds, got {value!r}"
+            if 10 <= len(value) <= 19:
+                return None  # epoch seconds through nanoseconds
+            return f"epoch timestamp has implausible magnitude: {value!r}"
+        try:
+            datetime.strptime(value, "%b %d %Y %H:%M:%S")
+        except ValueError:
+            return f"expected 'MMM dd yyyy HH:mm:ss' or epoch milliseconds, got {value!r}"
+        return None
     return None
 
 

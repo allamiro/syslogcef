@@ -178,3 +178,92 @@ def test_kafka_sender_uses_injected_producer():
     sender.close()
     assert producer.sent == [("cef-events", b"CEF:0|a|b|1|c|d|5|")]
     assert producer.flushed
+
+
+# --- round-2 review findings --------------------------------------------------
+
+def test_tcp_flood_without_newline_drops_connection(monkeypatch):
+    import syslogcef.net as net
+
+    monkeypatch.setattr(net, "MAX_TCP_BUFFER", 4096)
+
+    def send(port):
+        flood = socket.create_connection(("127.0.0.1", port), timeout=5)
+        try:
+            flood.sendall(b"x" * 20000)  # no newline: must be dropped, not buffered
+        except OSError:
+            pass
+        finally:
+            flood.close()
+        good = socket.create_connection(("127.0.0.1", port), timeout=5)
+        good.sendall(b"legit line\n")
+        good.close()
+
+    ready, thread = _run_when_ready(send)
+    lines = list(
+        listen_lines("tcp", "127.0.0.1", 0, max_messages=1, ready_callback=ready)
+    )
+    thread.join(5)
+    assert lines == ["legit line"]
+
+
+def test_rate_limiter_keeps_spacing_after_falling_behind():
+    from syslogcef.net import RateLimiter
+
+    clock_value = [0.0]
+    sleeps = []
+
+    def clock():
+        return clock_value[0]
+
+    def sleep(seconds):
+        sleeps.append(seconds)
+        clock_value[0] += seconds
+
+    limiter = RateLimiter(1, clock=clock, sleep=sleep)  # 1s interval
+    limiter.wait()          # t=0, no sleep
+    clock_value[0] = 5.0    # long processing pause
+    limiter.wait()          # behind schedule: no sleep, but next slot = 6.0
+    limiter.wait()          # must sleep a full interval, not send immediately
+    assert sleeps == [1.0]
+
+
+def test_eps_zero_is_rejected():
+    from syslogcef.net import create_sender
+
+    with pytest.raises(ValueError):
+        create_sender("udp://127.0.0.1:5514", eps=0)
+    with pytest.raises(ValueError):
+        create_sender("udp://127.0.0.1:5514", eps=-5)
+
+
+def test_kafka_async_failure_surfaces():
+    from syslogcef.net import KafkaSender
+
+    class FakeFuture:
+        def __init__(self):
+            self.errbacks = []
+
+        def add_errback(self, fn):
+            self.errbacks.append(fn)
+
+    class FakeProducer:
+        def __init__(self):
+            self.futures = []
+
+        def send(self, topic, payload):
+            fut = FakeFuture()
+            self.futures.append(fut)
+            return fut
+
+        def flush(self):
+            pass
+
+    producer = FakeProducer()
+    sender = KafkaSender("broker:9092", "t", producer=producer)
+    sender.send("record one")
+    producer.futures[0].errbacks[0](RuntimeError("broker down"))
+    with pytest.raises(ConnectionError):
+        sender.send("record two")
+    with pytest.raises(ConnectionError):
+        sender.close()
