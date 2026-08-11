@@ -1,11 +1,11 @@
 [Unit]
-Description=syslogcef syslog to CEF converter
+Description=syslogcef syslog to CEF converter (%i)
 Documentation=https://github.com/allamiro/syslogcef
 After=network.target
 
 [Service]
 Type=simple
-EnvironmentFile=/etc/syslogcef/syslogcef.conf
+EnvironmentFile=/etc/syslogcef/conf.d/%i.conf
 # ${OUTPUT_FILE} (braced) expands as a single argument, so rendered
 # strftime paths or paths with spaces are never word-split; an empty
 # value means stdout (the journal). $INPUT_FILE/$EXTRA_ARGS stay

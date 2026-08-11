@@ -188,12 +188,79 @@ configuration in `/etc/conf.d/syslogcef`):
   arguments for the converter.
 - `syslogcef.service` — runs `syslogcef --tail` against the configured
   input and appends CEF to the configured output.
+- `syslogcef@.service` — template unit for running several independent
+  pipelines from `/etc/syslogcef/conf.d/` (see below).
+- `/etc/logrotate.d/syslogcef` — daily rotation for flat `.cef` archives.
 
 ```bash
 sudo dnf install syslogcef-*.rpm
 sudo vi /etc/syslogcef/syslogcef.conf
 sudo systemctl enable --now syslogcef
 ```
+
+The environment file has three variables; everything else goes through
+`EXTRA_ARGS`, which accepts any command line flag (`--mode`, `--mapping`,
+`--listen`, `--send`, `--eps`, `--validate`, `--strict`,
+`--multiprocess`, `--log-level`, ...):
+
+```bash
+# File(s) to follow for new syslog lines, separated by spaces.
+INPUT_FILE=/var/log/messages
+
+# File that converted CEF events are appended to.
+OUTPUT_FILE=/var/log/syslogcef/events.cef
+
+# Extra arguments; leave INPUT_FILE empty and use --listen for a
+# network daemon: EXTRA_ARGS=--listen udp:514 --send tcp://siem:514
+EXTRA_ARGS=
+```
+
+### Timed output files
+
+`OUTPUT_FILE` (and `--output` generally) accepts strftime codes; the
+file is reopened whenever the rendered path changes and parent
+directories are created automatically:
+
+```bash
+# New file each hour, grouped in a directory per day:
+OUTPUT_FILE=/var/log/syslogcef/%Y-%m-%d/events-%H.cef
+```
+
+Unsupported `%` codes are rejected at startup (use `%%` for a literal
+percent). Keep templated outputs in a dated subdirectory as shown above:
+the installed logrotate snippet rotates every flat `.cef` file directly
+under `/var/log/syslogcef/`, and a templated file rendering flat there
+would be rotated twice. Prefer a stable filename if a downstream
+collector reads the archive — flat files are rotated daily by logrotate
+instead.
+
+### Multiple pipelines (one input per output)
+
+To map specific inputs to specific outputs, run one instance of the
+template unit per pipeline. Each instance reads its own file in
+`/etc/syslogcef/conf.d/` (a commented `example.conf.sample` is
+installed there) and has independent restart, logs, and options:
+
+```bash
+sudo cp /etc/syslogcef/conf.d/example.conf.sample /etc/syslogcef/conf.d/secure.conf
+sudo cp /etc/syslogcef/conf.d/example.conf.sample /etc/syslogcef/conf.d/firewall.conf
+sudo vi /etc/syslogcef/conf.d/secure.conf     # /var/log/secure  -> secure.cef
+sudo vi /etc/syslogcef/conf.d/firewall.conf   # --listen udp:514 --mode cisco_seq
+sudo systemctl enable --now syslogcef@secure syslogcef@firewall
+```
+
+On Alpine, OpenRC gets the same result with symlinked services:
+
+```bash
+sudo ln -s syslogcef /etc/init.d/syslogcef.firewall
+sudo cp /etc/conf.d/syslogcef /etc/conf.d/syslogcef.firewall
+sudo vi /etc/conf.d/syslogcef.firewall   # set a distinct INPUT_FILE and OUTPUT_FILE
+sudo rc-update add syslogcef.firewall && sudo rc-service syslogcef.firewall start
+```
+
+Give every instance its own `INPUT_FILE` and `OUTPUT_FILE` — two
+instances sharing them would process the same events twice and append
+to the same file concurrently.
 
 See [packaging/rpm/](packaging/rpm/) for the spec file and build
 instructions, including GPG signing of the RPM.

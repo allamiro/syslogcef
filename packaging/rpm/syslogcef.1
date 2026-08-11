@@ -100,11 +100,20 @@ line in
 .B \-\-tail
 and
 .B \-\-listen
-modes.
+modes. \fIFILE\fR may contain
+.BR strftime (3)
+codes, for example
+.IR /var/log/syslogcef/%Y\-%m\-%d/events\-%H.cef :
+the file is reopened whenever the rendered path changes (hourly in this
+example), parent directories are created as needed, and templated paths
+are always opened in append mode. Unsupported or platform\-specific
+codes are rejected at startup; write \fB%%\fR for a literal percent.
+An empty \fIFILE\fR is treated as standard output.
 .TP
 .BR \-a ", " \-\-append
-Append to the output file instead of truncating it. Used by the system
-service so restarts never lose archived events.
+Append to the output file instead of truncating it (implied for
+strftime\-templated paths). Used by the system service so restarts never
+lose archived events.
 .TP
 .BI \-\-send " URL"
 Forward each CEF record to a remote destination:
@@ -221,6 +230,22 @@ Configuration for the system service (environment file): input file or
 network endpoints, output file, and extra arguments. To run the
 service as a network daemon, leave INPUT_FILE empty and set, for
 example, EXTRA_ARGS="\-\-listen udp:514 \-\-send tcp://siem:514".
+.TP
+.I /etc/syslogcef/conf.d/*.conf
+Per\-instance configuration for the
+.I syslogcef@.service
+template unit. Each file defines one independent pipeline (its own
+input, output, mapping, and restart policy); start one with
+\fBsystemctl enable \-\-now syslogcef@\fIname\fR, where the instance
+name selects the matching conf.d file. A commented sample is installed
+as \fIexample.conf.sample\fR. On Alpine, create an OpenRC instance by
+symlinking \fI/etc/init.d/syslogcef\fR to \fIsyslogcef.name\fR with its
+own \fI/etc/conf.d/syslogcef.name\fR.
+.TP
+.I /etc/logrotate.d/syslogcef
+Rotates flat \fI.cef\fR archives under \fI/var/log/syslogcef\fR daily
+using copytruncate (the service keeps its output open). Outputs using
+strftime templates rotate themselves and are not matched.
 .TP
 .I syslogcef.service
 systemd unit (RPM and Debian packages). By default the service runs as

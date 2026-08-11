@@ -9,6 +9,9 @@ Source0:        %{pypi_source syslog2cef}
 Source1:        syslogcef.service
 Source2:        syslogcef.conf
 Source3:        syslogcef.1
+Source4:        syslogcef@.service
+Source5:        syslogcef-instance.conf
+Source6:        syslogcef.logrotate
 
 # EPEL 9's default Python (3.9) ships setuptools 53, too old for PEP 621
 # metadata, so build against the python3.11 stack there.
@@ -44,18 +47,24 @@ that follows a configured log file and appends CEF output.
 install -D -m 0644 %{SOURCE1} %{buildroot}%{_unitdir}/syslogcef.service
 install -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/syslogcef/syslogcef.conf
 install -D -m 0644 %{SOURCE3} %{buildroot}%{_mandir}/man1/syslogcef.1
+install -D -m 0644 %{SOURCE4} %{buildroot}%{_unitdir}/syslogcef@.service
+install -D -m 0644 %{SOURCE5} %{buildroot}%{_sysconfdir}/syslogcef/conf.d/example.conf.sample
+install -D -m 0644 %{SOURCE6} %{buildroot}%{_sysconfdir}/logrotate.d/syslogcef
 
 %check
 %pyproject_check_import syslogcef
 
 %post
 %systemd_post syslogcef.service
+%systemd_post syslogcef@.service
 
 %preun
 %systemd_preun syslogcef.service
+%systemd_preun syslogcef@.service
 
 %postun
 %systemd_postun_with_restart syslogcef.service
+%systemd_postun_with_restart syslogcef@.service
 
 %files -f %{pyproject_files}
 %license LICENSE
@@ -63,8 +72,12 @@ install -D -m 0644 %{SOURCE3} %{buildroot}%{_mandir}/man1/syslogcef.1
 %{_bindir}/syslogcef
 %{_mandir}/man1/syslogcef.1*
 %{_unitdir}/syslogcef.service
+%{_unitdir}/syslogcef@.service
 %dir %{_sysconfdir}/syslogcef
+%dir %{_sysconfdir}/syslogcef/conf.d
 %config(noreplace) %{_sysconfdir}/syslogcef/syslogcef.conf
+%config(noreplace) %{_sysconfdir}/syslogcef/conf.d/example.conf.sample
+%config(noreplace) %{_sysconfdir}/logrotate.d/syslogcef
 
 %changelog
 * Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.1.4-1

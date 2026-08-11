@@ -1,0 +1,20 @@
+# Rotate CEF archives written by the syslogcef service.
+#
+# copytruncate is required: syslogcef keeps its output file open in
+# append mode and does not reopen it on SIGHUP.
+#
+# The glob matches every .cef file directly under /var/log/syslogcef —
+# including a strftime-templated OUTPUT_FILE that renders flat there
+# (events-%H.cef -> events-10.cef), which would then be copytruncated
+# while still active. Keep templated outputs in a dated subdirectory
+# (e.g. %Y-%m-%d/events-%H.cef, as in the shipped examples): they rotate
+# themselves and this snippet never touches them.
+/var/log/syslogcef/*.cef {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

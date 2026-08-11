@@ -2,7 +2,9 @@
 description="syslog to CEF converter"
 
 command="/usr/bin/syslogcef"
-command_args="${INPUT_FILE} --tail --append --output ${OUTPUT_FILE} ${EXTRA_ARGS}"
+# OUTPUT_FILE is kept quoted through OpenRC's eval so strftime paths
+# are not word-split; an empty value means stdout.
+command_args="${INPUT_FILE} --tail --append --output \"${OUTPUT_FILE}\" ${EXTRA_ARGS}"
 command_background="yes"
 pidfile="/run/${RC_SVCNAME}.pid"
 
@@ -12,5 +14,9 @@ depend() {
 }
 
 start_pre() {
-	checkpath -d -m 0755 "$(dirname "${OUTPUT_FILE}")"
+	# strftime-templated paths (containing %) create their own directories.
+	case "${OUTPUT_FILE}" in
+	*%*|"") ;;
+	*) checkpath -d -m 0755 "$(dirname "${OUTPUT_FILE}")" ;;
+	esac
 }
