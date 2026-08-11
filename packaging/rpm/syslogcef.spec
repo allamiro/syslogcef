@@ -1,5 +1,5 @@
 Name:           syslogcef
-Version:        0.1.5
+Version:        0.1.6
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -81,6 +81,12 @@ install -D -m 0644 %{SOURCE6} %{buildroot}%{_sysconfdir}/logrotate.d/syslogcef
 %config(noreplace) %{_sysconfdir}/logrotate.d/syslogcef
 
 %changelog
+* Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.1.6-1
+- Fix eleven parser/renderer robustness bugs found by fuzzing: JSON
+  dialect routing, kv/rsyslog timestamp aliases, severity resolution
+  crashes, Feb 29 handling, tz offsets, non-string JSON scalars
+- Add ClusterFuzzLite PR fuzzing, structure-aware harness, seed corpus
+
 * Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.1.5-1
 - strftime-templated output paths (hourly/daily files, validated codes)
 - syslogcef@.service template unit with per-pipeline conf.d files

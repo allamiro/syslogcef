@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-08-11
+
+### Fixed
+
+Eleven robustness and correctness bugs found by the new fuzzing
+infrastructure (grammar-based property tests, ClusterFuzzLite, and AI
+review), each with a regression test:
+
+- The journald JSON parser claimed any JSON object: rsyslog-style
+  records lost their host, message, and timestamp. It now requires
+  journald-style keys and routes rsyslog-marker shapes to the rsyslog
+  parser, which also gained `@timestamp`/`timereported` and `syslogtag`
+  support.
+- kv streams: `ts=`/`timestamp=`/`datetime=` ISO keys are parsed (was:
+  only `date=`+`time=`/`eventtime=`); timestamp aliases in both kv and
+  rsyslog records are tried independently, so an invalid value no
+  longer masks a valid one; `ts_orig` records the value that parsed;
+  out-of-range `tz=` offsets and epoch values are ignored instead of
+  raising.
+- Severity resolution can no longer crash or corrupt the header: a
+  non-numeric kv `pri=`, Unicode digits (`severity=²`), and
+  multi-thousand-digit values (Python 3.11+ int-conversion limit) all
+  fall back to the default; the resolved value is validated to numeric
+  0-10.
+- Yearless `Feb 29` timestamps no longer crash when the converting
+  host's clock is in a non-leap year, and resolve to the nearest leap
+  year in time.
+- Non-string JSON scalars (`"message": 123`) are coerced instead of
+  crashing sanitization.
+
+### Added
+
+- ClusterFuzzLite coverage-guided fuzzing on every parser-touching PR,
+  a structure-aware fuzz harness generating six syslog dialects, a seed
+  corpus, grammar-based property tests with planted field values, and a
+  ready-to-submit OSS-Fuzz kit (see `fuzz/README.md`).
+- `docs/cef_fields.md`: ArcSight producer-vs-consumer rules, CEF
+  version notes, and a validated sample record.
+
 ## [0.1.5] - 2026-08-11
 
 ### Added
@@ -164,7 +203,8 @@ Initial release.
 - `--tail` now follows all given input files instead of blocking on the
   first one.
 
-[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/allamiro/syslogcef/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/allamiro/syslogcef/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/allamiro/syslogcef/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/allamiro/syslogcef/compare/v0.1.2...v0.1.3
