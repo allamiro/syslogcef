@@ -1,5 +1,5 @@
 Name:           syslogcef
-Version:        0.1.6
+Version:        0.2.0
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -81,6 +81,12 @@ install -D -m 0644 %{SOURCE6} %{buildroot}%{_sysconfdir}/logrotate.d/syslogcef
 %config(noreplace) %{_sysconfdir}/logrotate.d/syslogcef
 
 %changelog
+* Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.2.0-1
+- Add the CEF field dictionary: 176 keys with producer/consumer scopes
+  and 56 source-field aliases applied during normalization
+- Default mapping carries the raw line via cs1/cs1Label instead of the
+  consumer-only rawEvent key; validation warns on consumer-side keys
+
 * Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.1.6-1
 - Fix eleven parser/renderer robustness bugs found by fuzzing: JSON
   dialect routing, kv/rsyslog timestamp aliases, severity resolution
