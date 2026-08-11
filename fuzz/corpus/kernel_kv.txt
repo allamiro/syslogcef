@@ -1,0 +1,1 @@
+Aug 11 07:00:00 fw01 kernel: [12345.678] iptables: IN=eth0 OUT= SRC=10.0.0.1 DST=10.0.0.2

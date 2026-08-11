@@ -1,0 +1,1 @@
+CEF:0|fake|injected|1|x|pipe|9|msg=trying to confuse the escaper \| \\ =
