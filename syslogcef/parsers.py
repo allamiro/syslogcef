@@ -496,6 +496,18 @@ PARSERS = {
 }
 
 
+def _call_parser(parser, line: str, *, now: Optional[datetime] = None):
+    try:
+        code = parser.__code__
+        # Only real parameter names — co_varnames also lists locals, and a
+        # registered fn(line) with a local called "now" must keep working.
+        arg_names = code.co_varnames[: code.co_argcount + code.co_kwonlyargcount]
+        takes_now = "now" in arg_names
+    except AttributeError:
+        takes_now = False
+    return parser(line, now=now) if takes_now else parser(line)
+
+
 def autodetect_and_parse(line: str, *, mode: Optional[str] = None, now: Optional[datetime] = None) -> ParsedEvent:
     detectors = [
         ("journald_json", lambda s: s.lstrip().startswith("{")),
@@ -510,13 +522,19 @@ def autodetect_and_parse(line: str, *, mode: Optional[str] = None, now: Optional
         ("rfc3164", lambda s: bool(RFC3164_RE.match(s))),
     ]
 
+    from . import custom
+
     if mode:
-        parser = PARSERS.get(mode)
+        parser = PARSERS.get(mode) or custom.get_registered(mode)
         if parser is None:
             raise ParserError(f"Unknown parser mode: {mode}")
-        result = parser(line, now=now) if "now" in parser.__code__.co_varnames else parser(line)
+        result = _call_parser(parser, line, now=now)
         if result is None:
             raise ParserError(f"Parser '{mode}' could not parse line")
+        return result
+
+    result = custom.custom_parse(line, "before", now=now)
+    if result is not None:
         return result
 
     for key, detector in detectors:
@@ -529,6 +547,10 @@ def autodetect_and_parse(line: str, *, mode: Optional[str] = None, now: Optional
         except Exception:
             logger.exception("Parser %s failed for line", key)
             continue
+
+    result = custom.custom_parse(line, "after", now=now)
+    if result is not None:
+        return result
 
     # Nothing known matched: let the adaptive detector analyze the line and
     # synthesize a reusable pattern before giving up.

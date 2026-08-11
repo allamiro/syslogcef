@@ -73,6 +73,21 @@ Force a specific parser instead of auto-detection. One of
 Use the mapping JSON file \fIFILE\fR. When omitted, a bundled mapping
 is selected automatically from message content.
 .TP
+.BI \-\-patterns " FILE"
+Load custom parser patterns from the JSON file \fIFILE\fR (repeatable).
+Each pattern has a \fBname\fR, a \fBregex\fR whose named groups map to
+event fields (\fBpri\fR, \fBhost\fR, \fBapp\fR, \fBpid\fR, \fBmsgid\fR,
+\fBmsg\fR, \fBts\fR), a \fBtimestamp_format\fR (strptime format,
+\fBiso8601\fR, or \fBepoch\fR; required when a \fBts\fR group is
+present), and an optional \fBpriority\fR: \fBafter\fR (default; tried
+after the built\-in parsers, before the adaptive fallback) or
+\fBbefore\fR (tried first). Pattern names are accepted by
+.BR \-\-mode .
+Files are validated at startup; invalid regexes, unknown groups, or
+duplicate names fail immediately with a clear message. Patterns run
+against untrusted log content \(em keep them anchored and avoid nested
+quantifiers.
+.TP
 .B \-\-validate
 Check CEF extension values against the ArcSight extension dictionary
 (known keys, data types, port ranges, IP/MAC/timestamp formats,

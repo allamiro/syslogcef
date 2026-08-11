@@ -177,6 +177,18 @@ def _convert_line_mp(line: str, mode: Optional[str], mapping: Optional[str], val
     return convert_line(line, mode=mode, mapping=mapping, validate=validate, strict=strict)
 
 
+def _mp_load_patterns(pattern_files: list) -> None:
+    # Reload pattern files in each pool worker so --patterns works with
+    # --multiprocess. Clear first: under the fork start method workers
+    # inherit the parent's already-populated registry, and reloading into
+    # it would fail every worker with duplicate-name errors.
+    from .custom import clear_registry, load_patterns
+
+    clear_registry()
+    for path in pattern_files:
+        load_patterns(path)
+
+
 def process_lines(
     lines: Iterable[str],
     *,
@@ -186,10 +198,11 @@ def process_lines(
     pool_size: Optional[int],
     validate: bool = False,
     strict: bool = False,
+    pattern_files: Optional[list] = None,
 ) -> Iterator[str]:
     if use_multiprocessing:
         size = pool_size or max(1, cpu_count() - 1)
-        with Pool(size) as pool:
+        with Pool(size, initializer=_mp_load_patterns, initargs=(pattern_files or [],)) as pool:
             worker = partial(_convert_line_mp, mode=mode, mapping=mapping, validate=validate, strict=strict)
             for cef in pool.imap(worker, lines):
                 yield cef
@@ -209,8 +222,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("paths", nargs="*", type=Path, help="Input files (defaults to stdin)")
     parser.add_argument("-o", "--output", type=_optional_path, help="Output file; strftime codes such as %%Y-%%m-%%d or %%H start a new file when the rendered path changes (templated paths always append and parent directories are created). Use %%%% for a literal percent; unsupported codes are rejected. An empty value means stdout.")
     parser.add_argument("-a", "--append", action="store_true", help="Append to --output instead of truncating it (implied for templated paths)")
-    parser.add_argument("--mode", choices=["rfc3164", "rfc5424", "rsyslog_json", "rsyslog_file", "journald_json", "journald_short", "journald_iso", "cisco_seq", "iso_syslog", "kv"], help="Parser mode override")
+    parser.add_argument("--mode", help="Parser mode override: rfc3164, rfc5424, rsyslog_json, rsyslog_file, journald_json, journald_short, journald_iso, cisco_seq, iso_syslog, kv, or a name from --patterns")
     parser.add_argument("--mapping", type=str, help="Mapping JSON file")
+    parser.add_argument("--patterns", action="append", metavar="FILE", help="JSON file of custom parser patterns (named regexes); may be given multiple times. See the man page for the format.")
     parser.add_argument("--tail", action="store_true", help="Follow file like tail -f")
     parser.add_argument("--listen", metavar="PROTO:PORT", help="Receive syslog over the network instead of reading files/stdin, e.g. udp:514, tcp:5514, or udp:10.0.0.5:514")
     parser.add_argument("--send", metavar="URL", help="Forward CEF records to udp://HOST:PORT, tcp://HOST:PORT (newline-delimited, with reconnect), or kafka://BROKER:PORT/TOPIC (requires the kafka extra)")
@@ -230,6 +244,22 @@ def main(argv: Optional[list[str]] = None) -> int:
         except ValueError as exc:
             parser.error(f"invalid --output template: {exc}")
 
+    if args.patterns:
+        from .custom import PatternFileError, load_patterns
+
+        for pattern_file in args.patterns:
+            try:
+                load_patterns(pattern_file)
+            except PatternFileError as exc:
+                parser.error(str(exc))
+
+    if args.mode:
+        from .custom import get_registered
+        from .parsers import PARSERS
+
+        if args.mode not in PARSERS and get_registered(args.mode) is None:
+            parser.error(f"unknown --mode '{args.mode}' (not a built-in parser or a loaded pattern name)")
+
     mapping = args.mapping
 
     outputs: Iterator[str]
@@ -241,11 +271,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         except ValueError as exc:
             parser.error(str(exc))
         lines = listen_lines(proto, host, port)
-        outputs = process_lines(lines, mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict)
+        outputs = process_lines(lines, mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict, pattern_files=args.patterns)
     elif args.tail and args.paths:
-        outputs = process_lines(follow_files(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict)
+        outputs = process_lines(follow_files(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict, pattern_files=args.patterns)
     else:
-        outputs = process_lines(iter_lines_from_sources(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict)
+        outputs = process_lines(iter_lines_from_sources(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict, pattern_files=args.patterns)
 
     sender = None
     if args.send:
