@@ -7,18 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-08-11
+
 ### Added
 
 - `--output` accepts strftime codes (e.g.
   `/var/log/syslogcef/%Y-%m-%d/events-%H.cef`); the file is reopened
-  when the rendered path changes, parent directories are created, and
-  templated paths always append.
+  when the rendered path changes (checked at most once per second,
+  rendered with an aware local time so `%z`/`%Z` work), parent
+  directories are created, and templated paths always append. Codes
+  are validated against a portable allowlist at startup; `%%` is a
+  literal percent and keeps plain truncate/append semantics.
 - `syslogcef@.service` template unit: run several independent pipelines,
   each configured by its own file in `/etc/syslogcef/conf.d/` (a
   commented `example.conf.sample` is installed). The Alpine OpenRC
   service supports the same via symlinked instances.
 - Logrotate snippet (`/etc/logrotate.d/syslogcef`) for flat `.cef`
   archives, using copytruncate.
+- User-defined parsers: `--patterns file.json` loads named regexes
+  whose named groups map to event fields, with strptime/iso8601/epoch
+  timestamps, before/after precedence, and eager startup validation;
+  pattern names work as `--mode` values and per service instance via
+  conf.d. From Python: `register_parser()` and `load_patterns()`.
+- Property-based fuzz tests (hypothesis, `fuzz` extra) verifying the
+  pipeline never crashes, emits structurally valid CEF, stays within a
+  per-line time budget, and keeps the adaptive cache bounded — run on
+  every change, plus a weekly 10k-example deep run and an Atheris
+  harness in `fuzz/`.
+- CI now lints (ruff, shellcheck, hadolint) and builds + smoke-tests
+  the container image on every change; issues and pull requests are
+  auto-labeled and assigned.
+
+### Changed
+
+- An empty `--output` value means stdout, so `OUTPUT_FILE=` in the
+  service environment file logs to the journal instead of misparsing
+  the following arguments; `${OUTPUT_FILE}` is expanded unsplit in the
+  systemd units and quoted in the OpenRC script.
+- The container image runs as numeric UID 65534 so non-root execution
+  is verifiable by container runtimes.
+- The RPM `%check` runs the full test suite instead of only an import
+  check.
 
 ## [0.1.4] - 2026-08-11
 
@@ -135,7 +164,8 @@ Initial release.
 - `--tail` now follows all given input files instead of blocking on the
   first one.
 
-[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/allamiro/syslogcef/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/allamiro/syslogcef/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/allamiro/syslogcef/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/allamiro/syslogcef/compare/v0.1.1...v0.1.2
