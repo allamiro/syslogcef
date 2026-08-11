@@ -39,6 +39,127 @@ def tail_file(path: Path, *, follow: bool = False) -> Iterator[str]:
             yield line.rstrip("\n")
 
 
+class _Follower:
+    """One tailed path, surviving rotation (rename, replace, truncate)."""
+
+    _FINGERPRINT_LEN = 256
+
+    def __init__(self, path: Path):
+        from collections import deque
+
+        self.path = path
+        self.handle = path.open("r", encoding="utf-8", errors="replace")
+        self.signature = self._fsignature()
+        # Fingerprint of the *already-consumed* head of the file. Those
+        # bytes are stable across appends (which only add data past our
+        # offset) but change when a copy-truncate rewrites the file in
+        # place, so comparing them detects rewrites the size/inode check
+        # misses. Length is bounded by both _FINGERPRINT_LEN and our read
+        # offset, so a plain append to a short file is never mistaken for
+        # a rewrite.
+        self.fp_len = 0
+        self.fingerprint = b""
+        self.pending = deque()
+
+    def _fsignature(self):
+        import os
+
+        st = os.fstat(self.handle.fileno())
+        return (st.st_dev, st.st_ino)
+
+    def _read_head(self, length: int) -> bytes:
+        # Positional read so the follow position is untouched.
+        import os
+
+        if self.handle is None or length <= 0:
+            return b""
+        try:
+            return os.pread(self.handle.fileno(), length, 0)
+        except (OSError, AttributeError):
+            return b""
+
+    def _capture_fingerprint(self) -> None:
+        if self.handle is None:
+            self.fp_len, self.fingerprint = 0, b""
+            return
+        self.fp_len = min(self._FINGERPRINT_LEN, self.handle.tell())
+        self.fingerprint = self._read_head(self.fp_len)
+
+    def read_lines(self) -> Iterator[str]:
+        while self.pending:
+            yield self.pending.popleft()
+        if self.handle is None:
+            return
+        while True:
+            line = self.handle.readline()
+            if not line:
+                # At EOF: record the consumed-head fingerprint so the next
+                # rotation check can tell an append from an in-place rewrite.
+                self._capture_fingerprint()
+                return
+            yield line.rstrip("\n")
+
+    def check_rotation(self) -> bool:
+        """Reattach after rotation events. Returns True if a replacement
+        file was (re)opened, so the caller can read it before treating
+        the poll as idle.
+
+        Runs every pass, not only when idle: a file that is renamed away
+        while still being written keeps this follower producing from the
+        stale descriptor forever, so a replacement at the original path
+        would never be picked up if rotation were checked only on idle
+        polls.
+
+        - rename-and-recreate: the path's dev/inode changes; drain any
+          remaining lines from the old descriptor, then open the new
+          file from the start.
+        - copy-truncate: same inode but size below our offset; rewind.
+        - temporary disappearance mid-rotation: keep the old descriptor
+          (it stays readable) and retry until a replacement appears.
+        """
+        if self.handle is None:
+            try:
+                self.handle = self.path.open("r", encoding="utf-8", errors="replace")
+                self.signature = self._fsignature()
+                self.fp_len, self.fingerprint = 0, b""
+                return True
+            except OSError:
+                return False
+        try:
+            st = self.path.stat()
+        except OSError:
+            return False
+        if (st.st_dev, st.st_ino) != self.signature:
+            for line in self.handle:
+                self.pending.append(line.rstrip("\n"))
+            self.handle.close()
+            self.handle = None
+            return self.check_rotation()  # open the replacement immediately
+        # Copy-truncate: same inode, but either the file shrank below our
+        # offset, or the already-consumed head changed (an in-place rewrite
+        # that regrew past our offset). Comparing only the consumed prefix
+        # means a plain append — which never touches those bytes — is not
+        # mistaken for a rewrite, even for a file shorter than the cap.
+        offset = self.handle.tell()
+        rewound = False
+        if offset > 0:
+            if st.st_size < offset:
+                rewound = True
+            elif self.fp_len and self._read_head(self.fp_len) != self.fingerprint:
+                rewound = True
+        if rewound:
+            self.handle.seek(0)
+            self.fp_len, self.fingerprint = 0, b""
+        # A rewind exposes fresh content that must be read before the idle
+        # limit applies, so report it as activity like a reopen.
+        return rewound
+
+    def close(self) -> None:
+        if self.handle is not None:
+            self.handle.close()
+            self.handle = None
+
+
 def follow_files(
     paths: Iterable[Path],
     *,
@@ -47,23 +168,36 @@ def follow_files(
 ) -> Iterator[str]:
     """Tail several files at once, round-robin, yielding lines as they appear.
 
+    Survives log rotation on every path independently: renamed-and-
+    recreated files are reopened from the start (after draining the old
+    descriptor), copy-truncated files are rewound, and paths that
+    disappear mid-rotation are retried until a replacement appears.
+
     ``max_idle_polls`` bounds how many consecutive empty polls are allowed
     before the generator stops; ``None`` follows forever.
     """
 
-    handles = [path.open("r", encoding="utf-8", errors="replace") for path in paths]
+    followers = [_Follower(path) for path in paths]
     idle_polls = 0
     try:
         while True:
-            got_line = False
-            for handle in handles:
-                while True:
-                    line = handle.readline()
-                    if not line:
-                        break
-                    got_line = True
-                    yield line.rstrip("\n")
-            if got_line:
+            any_line = False
+            for follower in followers:
+                for line in follower.read_lines():
+                    any_line = True
+                    yield line
+            # Rotation is checked for every follower on every pass —
+            # including busy ones — so a file renamed away while still
+            # being written cannot pin this follower to the stale
+            # descriptor and starve the replacement at the origin path.
+            reopened = False
+            for follower in followers:
+                if follower.check_rotation():
+                    reopened = True
+            # A reopened replacement must be read before the idle limit
+            # applies, so treat a reopen as activity: loop again to read
+            # it rather than counting this pass as idle.
+            if any_line or reopened:
                 idle_polls = 0
                 continue
             idle_polls += 1
@@ -71,8 +205,8 @@ def follow_files(
                 return
             time.sleep(poll_interval)
     finally:
-        for handle in handles:
-            handle.close()
+        for follower in followers:
+            follower.close()
 
 
 # Portable strftime codes with at-coarsest one-second granularity.
