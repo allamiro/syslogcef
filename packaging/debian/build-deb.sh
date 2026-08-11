@@ -14,13 +14,17 @@ mkdir -p \
   "$STAGE/DEBIAN" \
   "$STAGE/usr/bin" \
   "$STAGE/lib/systemd/system" \
-  "$STAGE/etc/syslogcef" \
+  "$STAGE/etc/syslogcef/conf.d" \
+  "$STAGE/etc/logrotate.d" \
   "$STAGE/usr/share/doc/syslogcef" \
   "$STAGE/usr/share/man/man1"
 
 install -m 0755 "$PYZ" "$STAGE/usr/bin/syslogcef"
 install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef.service" "$STAGE/lib/systemd/system/syslogcef.service"
+install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef@.service" "$STAGE/lib/systemd/system/syslogcef@.service"
 install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef.conf" "$STAGE/etc/syslogcef/syslogcef.conf"
+install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef-instance.conf" "$STAGE/etc/syslogcef/conf.d/example.conf.sample"
+install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef.logrotate" "$STAGE/etc/logrotate.d/syslogcef"
 install -m 0644 "$REPO_ROOT/README.md" "$REPO_ROOT/LICENSE" "$REPO_ROOT/CHANGELOG.md" "$STAGE/usr/share/doc/syslogcef/"
 install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef.1" "$STAGE/usr/share/man/man1/syslogcef.1"
 gzip -9n "$STAGE/usr/share/man/man1/syslogcef.1"
@@ -46,7 +50,7 @@ Description: Convert syslog events to ArcSight CEF
  service that follows a configured log file and appends CEF output.
 EOF
 
-echo /etc/syslogcef/syslogcef.conf > "$STAGE/DEBIAN/conffiles"
+printf '%s\n' /etc/syslogcef/syslogcef.conf /etc/logrotate.d/syslogcef > "$STAGE/DEBIAN/conffiles"
 
 cat > "$STAGE/DEBIAN/postinst" <<'EOF'
 #!/bin/sh
@@ -61,6 +65,7 @@ cat > "$STAGE/DEBIAN/prerm" <<'EOF'
 set -e
 if [ -d /run/systemd/system ] && [ "$1" = remove ]; then
     systemctl stop syslogcef.service >/dev/null 2>&1 || true
+    systemctl stop 'syslogcef@*' >/dev/null 2>&1 || true
 fi
 EOF
 

@@ -4,6 +4,7 @@ import argparse
 import logging
 import sys
 import time
+from datetime import datetime
 from functools import partial
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
@@ -74,6 +75,104 @@ def follow_files(
             handle.close()
 
 
+# Portable strftime codes with at-coarsest one-second granularity.
+# %f (microseconds) is excluded so a rendered path can only change once
+# per second; platform extensions (%e, %s, %-d, ...) are excluded so
+# templates behave identically on glibc and musl.
+_STRFTIME_CODES = frozenset("aAbBcdGHIjmMpSuUVwWxXyYzZ")
+
+
+def template_has_codes(text: str) -> bool:
+    """Return True if *text* contains supported strftime codes.
+
+    ``%%`` is a literal percent. Any other ``%`` sequence, including a
+    trailing ``%``, raises ValueError so typos like ``%Q`` fail at
+    startup instead of silently producing a literal filename (glibc
+    passes unknown codes through rather than raising).
+    """
+    templated = False
+    i = 0
+    while i < len(text):
+        if text[i] == "%":
+            if i + 1 >= len(text):
+                raise ValueError("trailing '%' (use '%%' for a literal percent)")
+            nxt = text[i + 1]
+            if nxt in _STRFTIME_CODES:
+                templated = True
+            elif nxt != "%":
+                raise ValueError(f"unsupported strftime code '%{nxt}' (use '%%' for a literal percent)")
+            i += 2
+        else:
+            i += 1
+    return templated
+
+
+def write_lines(
+    outputs: Iterable[str],
+    template: Path,
+    *,
+    append: bool,
+    stream_flush: bool,
+    sender=None,
+) -> None:
+    """Write CEF lines to ``template``.
+
+    A path containing strftime codes is re-rendered as time passes and
+    the file is reopened whenever the rendered path changes, e.g.
+    ``/var/log/syslogcef/%Y-%m-%d/events-%H.cef`` starts a new file each
+    hour. Templated paths are always opened in append mode and their
+    parent directories are created; paths without codes (``%%`` renders
+    as a literal percent) keep the truncate/append behaviour selected by
+    ``append``.
+    """
+    text = str(template)
+    if not template_has_codes(text):
+        if "%" in text:
+            # Rendered (%%-escaped) paths get the same parent-creation
+            # guarantee as templated ones; untouched paths keep the old
+            # fail-if-missing behaviour.
+            path = Path(datetime.now().astimezone().strftime(text))
+            path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            path = template
+        with path.open("a" if append else "w", encoding="utf-8") as fp:
+            for cef in outputs:
+                fp.write(cef + "\n")
+                if stream_flush:
+                    fp.flush()
+                if sender:
+                    sender.send(cef)
+        return
+
+    fp = None
+    current = None
+    last_tick = None
+    try:
+        for cef in outputs:
+            # Aware local datetime so %z/%Z render the real offset/name
+            # instead of the empty string a naive datetime produces.
+            now = datetime.now().astimezone()
+            tick = now.replace(microsecond=0)
+            if tick != last_tick:
+                last_tick = tick
+                rendered = now.strftime(text)
+                if rendered != current:
+                    if fp:
+                        fp.close()
+                    path = Path(rendered)
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    fp = path.open("a", encoding="utf-8")
+                    current = rendered
+            fp.write(cef + "\n")
+            if stream_flush:
+                fp.flush()
+            if sender:
+                sender.send(cef)
+    finally:
+        if fp:
+            fp.close()
+
+
 def _convert_line_mp(line: str, mode: Optional[str], mapping: Optional[str], validate: bool = False, strict: bool = False) -> str:
     return convert_line(line, mode=mode, mapping=mapping, validate=validate, strict=strict)
 
@@ -99,11 +198,17 @@ def process_lines(
             yield convert_line(line, mode=mode, mapping=mapping, validate=validate, strict=strict)
 
 
+def _optional_path(value: str) -> Optional[Path]:
+    # An empty --output (e.g. OUTPUT_FILE= left blank in the service
+    # environment file) means stdout, not a file named "".
+    return Path(value) if value else None
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Convert syslog lines to ArcSight CEF")
     parser.add_argument("paths", nargs="*", type=Path, help="Input files (defaults to stdin)")
-    parser.add_argument("-o", "--output", type=Path, help="Output file")
-    parser.add_argument("-a", "--append", action="store_true", help="Append to --output instead of truncating it")
+    parser.add_argument("-o", "--output", type=_optional_path, help="Output file; strftime codes such as %%Y-%%m-%%d or %%H start a new file when the rendered path changes (templated paths always append and parent directories are created). Use %%%% for a literal percent; unsupported codes are rejected. An empty value means stdout.")
+    parser.add_argument("-a", "--append", action="store_true", help="Append to --output instead of truncating it (implied for templated paths)")
     parser.add_argument("--mode", choices=["rfc3164", "rfc5424", "rsyslog_json", "rsyslog_file", "journald_json", "journald_short", "journald_iso", "cisco_seq", "iso_syslog", "kv"], help="Parser mode override")
     parser.add_argument("--mapping", type=str, help="Mapping JSON file")
     parser.add_argument("--tail", action="store_true", help="Follow file like tail -f")
@@ -118,6 +223,12 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=getattr(logging, args.log_level.upper(), logging.WARNING))
+
+    if args.output:
+        try:
+            template_has_codes(str(args.output))
+        except ValueError as exc:
+            parser.error(f"invalid --output template: {exc}")
 
     mapping = args.mapping
 
@@ -149,13 +260,13 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     try:
         if args.output:
-            with args.output.open("a" if args.append else "w", encoding="utf-8") as fp:
-                for cef in outputs:
-                    fp.write(cef + "\n")
-                    if args.tail or args.listen:
-                        fp.flush()
-                    if sender:
-                        sender.send(cef)
+            write_lines(
+                outputs,
+                args.output,
+                append=args.append,
+                stream_flush=bool(args.tail or args.listen),
+                sender=sender,
+            )
         elif sender:
             for cef in outputs:
                 sender.send(cef)

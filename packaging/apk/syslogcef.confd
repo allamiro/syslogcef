@@ -5,8 +5,18 @@
 # File to follow for new syslog lines.
 INPUT_FILE=/var/log/messages
 
-# File that converted CEF events are appended to.
+# File that converted CEF events are appended to. strftime codes start a
+# new file when the rendered path changes; parent directories are created.
+# Example: OUTPUT_FILE=/var/log/syslogcef/%Y-%m-%d/events-%H.cef
 OUTPUT_FILE=/var/log/syslogcef/events.cef
 
 # Extra arguments, for example: --mode rfc3164 --mapping /etc/syslogcef/mapping.json
 EXTRA_ARGS=""
+
+# To run several pipelines (each input mapped to its own output), create
+# an OpenRC instance: symlink the service and give it its own conf.d file:
+#   ln -s syslogcef /etc/init.d/syslogcef.firewall
+#   cp /etc/conf.d/syslogcef /etc/conf.d/syslogcef.firewall
+#   (edit syslogcef.firewall: each instance needs a distinct INPUT_FILE
+#    and OUTPUT_FILE, or events are processed and appended twice)
+#   rc-update add syslogcef.firewall && rc-service syslogcef.firewall start

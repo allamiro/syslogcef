@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `--output` accepts strftime codes (e.g.
+  `/var/log/syslogcef/%Y-%m-%d/events-%H.cef`); the file is reopened
+  when the rendered path changes, parent directories are created, and
+  templated paths always append.
+- `syslogcef@.service` template unit: run several independent pipelines,
+  each configured by its own file in `/etc/syslogcef/conf.d/` (a
+  commented `example.conf.sample` is installed). The Alpine OpenRC
+  service supports the same via symlinked instances.
+- Logrotate snippet (`/etc/logrotate.d/syslogcef`) for flat `.cef`
+  archives, using copytruncate.
+
 ## [0.1.4] - 2026-08-11
 
 ### Fixed
