@@ -178,6 +178,55 @@ Field templates that reference missing keys resolve to an empty string
 rather than failing the event. See [docs/cef_fields.md](docs/cef_fields.md)
 for the full CEF extension dictionary.
 
+## Custom Parsers
+
+When a device emits a format no built-in parser handles, add your own
+detection regexes the same way you add mappings — no code required:
+
+```bash
+syslogcef acme.log --patterns /etc/syslogcef/patterns.json
+```
+
+```json
+{
+  "patterns": [
+    {
+      "name": "acme_fw",
+      "regex": "^ACME (?P<ts>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}) (?P<host>\\S+) (?P<app>\\w+)\\[(?P<pid>\\d+)\\]: (?P<msg>.*)$",
+      "timestamp_format": "%Y-%m-%d %H:%M:%S",
+      "priority": "after"
+    }
+  ]
+}
+```
+
+- Named groups map to event fields: `pri`, `host`, `app`, `pid`,
+  `msgid`, `msg`, and `ts`.
+- A `ts` group requires `timestamp_format`: a strptime format,
+  `iso8601`, or `epoch`. Yearless formats get the same year-rollover
+  inference as the built-in parsers; an unparseable timestamp never
+  drops the event.
+- `priority` is `"after"` (default: tried after the built-ins, before
+  the adaptive fallback) or `"before"` (tried first, overriding
+  built-ins).
+- Pattern names work as `--mode` values, and files are validated at
+  startup — bad regexes, unknown groups, or duplicate names fail with
+  a clear message instead of mid-stream.
+- Per-service-instance patterns: set
+  `EXTRA_ARGS=--patterns /etc/syslogcef/patterns.json` in the
+  instance's conf.d file.
+- Your regexes run against untrusted log content — keep them anchored
+  and avoid nested quantifiers (ReDoS).
+
+From Python, register full parser functions instead:
+
+```python
+from syslogcef import register_parser, load_patterns
+
+load_patterns("patterns.json")               # same file format
+register_parser("marker", my_parse_fn)       # fn(line) -> ParsedEvent | None
+```
+
 ## Running as a Service
 
 The RPM and Debian packages install a systemd unit and an environment

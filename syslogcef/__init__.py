@@ -10,10 +10,14 @@ conversion workflow.
 from __future__ import annotations
 
 from .api import convert_line, normalize_event, parse_syslog, to_cef
+from .custom import PatternFileError, load_patterns, register_parser
 
 __all__ = [
     "convert_line",
     "normalize_event",
     "parse_syslog",
     "to_cef",
+    "load_patterns",
+    "register_parser",
+    "PatternFileError",
 ]
