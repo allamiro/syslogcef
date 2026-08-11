@@ -1,0 +1,55 @@
+name: ClusterFuzzLite batch
+
+# Feeds the per-PR (code-change) fuzzing runs: batch mode grows and
+# uploads the corpus artifact (cifuzz-corpus-*) the PR runs download,
+# prune keeps it minimal, and coverage mode generates the report the PR
+# runs use to skip fuzz targets unaffected by a change. Without this
+# workflow every PR run starts from seeds only and warns about missing
+# corpus/coverage artifacts. Pruning runs in its own workflow
+# (cflite_prune.yml): artifact names are immutable within a run, so a
+# prune job here would collide with the batch job's corpus upload.
+
+on:
+  schedule:
+    - cron: '23 4 * * 1'  # weekly, Monday 04:23 UTC (after the deep fuzz run)
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  batch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Build fuzzers
+        uses: google/clusterfuzzlite/actions/build_fuzzers@v1
+        with:
+          language: python
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          sanitizer: address
+      - name: Batch fuzz (grows and uploads the corpus)
+        uses: google/clusterfuzzlite/actions/run_fuzzers@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fuzz-seconds: 1800
+          mode: 'batch'
+          sanitizer: address
+
+  coverage:
+    runs-on: ubuntu-latest
+    needs: batch
+    timeout-minutes: 30
+    steps:
+      - name: Build fuzzers (coverage)
+        uses: google/clusterfuzzlite/actions/build_fuzzers@v1
+        with:
+          language: python
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          sanitizer: coverage
+      - name: Generate coverage report
+        uses: google/clusterfuzzlite/actions/run_fuzzers@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fuzz-seconds: 600
+          mode: 'coverage'
+          sanitizer: 'coverage'

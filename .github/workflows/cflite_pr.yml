@@ -22,6 +22,10 @@ jobs:
         uses: google/clusterfuzzlite/actions/build_fuzzers@v1
         with:
           language: python
+          # Token needed here too: the build step fetches the latest
+          # coverage-report artifact to skip unaffected fuzz targets;
+          # without it that lookup 401s (harmless but noisy).
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           sanitizer: address
       - name: Run fuzzers on the code change
         uses: google/clusterfuzzlite/actions/run_fuzzers@v1

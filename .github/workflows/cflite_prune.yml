@@ -1,0 +1,31 @@
+name: ClusterFuzzLite prune
+
+# Minimizes the accumulated corpus. Runs in its own workflow (not as a
+# job in the batch workflow) because both modes upload artifacts named
+# cifuzz-corpus-* and artifact names are immutable within a single run.
+
+on:
+  schedule:
+    - cron: '23 5 * * 3'  # weekly, Wednesday 05:23 UTC
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Build fuzzers
+        uses: google/clusterfuzzlite/actions/build_fuzzers@v1
+        with:
+          language: python
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          sanitizer: address
+      - name: Prune corpus
+        uses: google/clusterfuzzlite/actions/run_fuzzers@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fuzz-seconds: 300
+          mode: 'prune'
+          sanitizer: address
