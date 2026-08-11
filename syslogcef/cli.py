@@ -15,16 +15,26 @@ from .api import StreamConverter, convert_line
 logger = logging.getLogger(__name__)
 
 
-def iter_lines_from_sources(paths: Iterable[Path] | None) -> Iterator[str]:
+def iter_lines_from_sources(paths: Iterable[Path] | None, *, tag_sources: bool = False) -> Iterator[Any]:
+    """Yield lines from stdin or the given files.
+
+    With ``tag_sources`` each item is ``(source, line)`` so downstream
+    continuation handling can keep per-file context instead of letting
+    an indented line at the top of one file inherit the previous file's
+    host and timestamp.
+    """
     if not paths:
         for line in sys.stdin:
-            yield line.rstrip("\n")
+            line = line.rstrip("\n")
+            yield ("stdin", line) if tag_sources else line
         return
 
     for path in paths:
+        source = str(path)
         with path.open("r", encoding="utf-8", errors="replace") as handle:
             for line in handle:
-                yield line.rstrip("\n")
+                line = line.rstrip("\n")
+                yield (source, line) if tag_sources else line
 
 
 def tail_file(path: Path, *, follow: bool = False) -> Iterator[str]:
@@ -165,7 +175,8 @@ def follow_files(
     *,
     poll_interval: float = 0.5,
     max_idle_polls: Optional[int] = None,
-) -> Iterator[str]:
+    tag_sources: bool = False,
+) -> Iterator[Any]:
     """Tail several files at once, round-robin, yielding lines as they appear.
 
     Survives log rotation on every path independently: renamed-and-
@@ -175,6 +186,10 @@ def follow_files(
 
     ``max_idle_polls`` bounds how many consecutive empty polls are allowed
     before the generator stops; ``None`` follows forever.
+
+    With ``tag_sources`` each item is ``(path, line)``: the round-robin
+    interleaves files, so continuation context downstream must be keyed
+    per file rather than shared across them.
     """
 
     followers = [_Follower(path) for path in paths]
@@ -183,9 +198,10 @@ def follow_files(
         while True:
             any_line = False
             for follower in followers:
+                source = str(follower.path)
                 for line in follower.read_lines():
                     any_line = True
-                    yield line
+                    yield (source, line) if tag_sources else line
             # Rotation is checked for every follower on every pass —
             # including busy ones — so a file renamed away while still
             # being written cannot pin this follower to the stale
@@ -323,8 +339,16 @@ def _mp_load_patterns(pattern_files: list) -> None:
         load_patterns(path)
 
 
+def _split_item(item: Any) -> tuple:
+    # Line iterators may tag items as (source, line); untagged plain
+    # strings share the "" source.
+    if isinstance(item, tuple):
+        return item
+    return ("", item)
+
+
 def process_lines(
-    lines: Iterable[str],
+    lines: Iterable[Any],
     *,
     mode: Optional[str],
     mapping: Any,
@@ -338,15 +362,17 @@ def process_lines(
         size = pool_size or max(1, cpu_count() - 1)
         with Pool(size, initializer=_mp_load_patterns, initargs=(pattern_files or [],)) as pool:
             worker = partial(_convert_line_mp, mode=mode, mapping=mapping, validate=validate, strict=strict)
-            for cef in pool.imap(worker, lines):
+            for cef in pool.imap(worker, (_split_item(item)[1] for item in lines)):
                 yield cef
     else:
         # Stateful conversion so whitespace-indented continuation lines
-        # inherit host/app/timestamp from the preceding event. Unavailable
+        # inherit host/app/timestamp from the preceding event, keyed by
+        # source so interleaved files never cross-inherit. Unavailable
         # under --multiprocess, where workers cannot share line order.
         converter = StreamConverter(mode=mode, mapping=mapping, validate=validate, strict=strict)
-        for line in lines:
-            yield converter.convert(line)
+        for item in lines:
+            source, line = _split_item(item)
+            yield converter.convert(line, source=source)
 
 
 def _optional_path(value: str) -> Optional[Path]:
@@ -443,9 +469,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         lines = listen_lines(proto, host, port)
         outputs = process_lines(lines, mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict, pattern_files=args.patterns)
     elif args.tail and args.paths:
-        outputs = process_lines(follow_files(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict, pattern_files=args.patterns)
+        outputs = process_lines(follow_files(args.paths, tag_sources=True), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict, pattern_files=args.patterns)
     else:
-        outputs = process_lines(iter_lines_from_sources(args.paths), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict, pattern_files=args.patterns)
+        outputs = process_lines(iter_lines_from_sources(args.paths, tag_sources=True), mode=args.mode, mapping=mapping, use_multiprocessing=args.multiprocess, pool_size=args.pool_size, validate=args.validate or args.strict, strict=args.strict, pattern_files=args.patterns)
 
     sender = None
     if args.send:

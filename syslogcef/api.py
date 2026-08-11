@@ -7,8 +7,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
-from .parsers import ParsedEvent, autodetect_and_parse
+from .parsers import ParsedEvent, ParserError, autodetect_and_parse
 from .normalizer import NormalizedEvent, normalize
+from .utils import sanitize_message
 from .mappings import CISCO_ASA, CISCO_IOS, F5, FORTINET, LINUX, SOPHOS, VMWARE
 from .cef import CEFEvent, build_cef
 
@@ -132,6 +133,11 @@ class StreamConverter:
     inherits host, app, pid, PRI, and timestamp from the most recent
     fully-parsed event and is tagged ``source_hint="continuation"``. One
     CEF record is still emitted per input line.
+
+    Context is tracked per ``source`` (e.g. one entry per input file), so
+    interleaved streams — several files tailed at once — never inherit
+    another file's host or timestamp. Callers with a single stream can
+    ignore the parameter.
     """
 
     def __init__(
@@ -146,12 +152,34 @@ class StreamConverter:
         self.mapping = mapping
         self.validate = validate
         self.strict = strict
-        self._context: Optional[ParsedEvent] = None
+        self._contexts: dict[str, ParsedEvent] = {}
 
-    def convert(self, line: str, *, now: Optional[datetime] = None) -> str:
-        parsed = parse_syslog(line, mode=self.mode, now=now)
-        if line[:1] in ("\t", " ") and self._context is not None:
-            ctx = self._context
+    def convert(self, line: str, *, now: Optional[datetime] = None, source: str = "") -> str:
+        ctx = self._contexts.get(source)
+        is_continuation = line[:1] in ("\t", " ") and ctx is not None
+        try:
+            parsed = parse_syslog(line, mode=self.mode, now=now)
+        except ParserError:
+            if not is_continuation:
+                raise
+            # A forced --mode rejects headerless continuation lines; a
+            # continuation with context must inherit, not abort the run.
+            parsed = ParsedEvent(
+                pri=None,
+                facility=None,
+                severity=None,
+                ts=None,
+                ts_orig="",
+                host=None,
+                app=None,
+                pid=None,
+                msgid=None,
+                sd={},
+                msg=sanitize_message(line),
+                raw=line,
+                source_hint="unknown",
+            )
+        if is_continuation:
             parsed.host = ctx.host
             parsed.app = parsed.app or ctx.app
             parsed.pid = parsed.pid or ctx.pid
@@ -166,7 +194,7 @@ class StreamConverter:
         elif parsed.host is not None and parsed.source_hint != "unknown":
             # Only a line whose host was actually parsed (not the
             # guessed fallback) may become continuation context.
-            self._context = parsed
+            self._contexts[source] = parsed
         normalized = normalize_event(parsed)
         return to_cef(normalized, self.mapping, validate=self.validate, strict=self.strict)
 

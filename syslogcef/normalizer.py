@@ -58,6 +58,15 @@ def normalize(event: ParsedEvent) -> NormalizedEvent:
         "rt": str(int(ts.timestamp() * 1000)),
     }
 
+    # dvcpid is an integer field in the CEF dictionary, but RFC 5424
+    # PROCID (and kv pids) may be arbitrary strings ("worker-A"); expose
+    # a numeric-only alias so mappings can emit dvcpid without tripping
+    # strict validation. ASCII check: isdigit() alone accepts Unicode
+    # digits that int() consumers reject.
+    pid = str(event.pid) if event.pid is not None else ""
+    if pid.isascii() and pid.isdigit():
+        extras["dvcpid"] = pid
+
     if event.source_hint in {"rfc3164", "rsyslog", "journald"} and event.host is None:
         extras["host"] = "localhost"
 
