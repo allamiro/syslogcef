@@ -1,6 +1,6 @@
 # Maintainer: Tamir Suliman <allamiro@gmail.com>
 pkgname=syslogcef
-pkgver=0.1.3
+pkgver=0.1.4
 pkgrel=0
 pkgdesc="Convert syslog events to ArcSight CEF"
 url="https://github.com/allamiro/syslogcef"
