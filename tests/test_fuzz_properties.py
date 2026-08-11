@@ -93,15 +93,21 @@ def split_unescaped_pipes(record: str) -> list:
 
 def assert_valid_cef(cef: str) -> None:
     parts = split_unescaped_pipes(cef)
-    # 7 header fields + at least one extension chunk (pipes are legal
-    # unescaped inside the extension part, so more chunks may follow).
-    assert len(parts) >= 8, f"only {len(parts)} pipe-separated parts"
-    # Positional checks so an unescaped pipe inside a header value cannot
-    # shift fields undetected: the version slot must be exactly CEF:0 and
-    # the severity slot must be numeric — a shifted header puts free text
-    # there and fails.
+    # The renderer escapes pipes in header AND extension values, so a
+    # correct record has exactly 8 parts (7 header + 1 extension chunk);
+    # any extra unescaped pipe anywhere is an escaping regression.
+    assert len(parts) == 8, f"{len(parts)} pipe-separated parts, expected 8"
+    # Positional checks so a shifted header cannot hide: the version slot
+    # must be exactly CEF:0 and the severity slot must be numeric.
     assert parts[0] == "CEF:0", f"bad version field: {parts[0]!r}"
     assert re.fullmatch(r"\d{1,2}", parts[6]), f"non-numeric severity: {parts[6]!r}"
+    # Extension-boundary check: the chunk after the severity slot must be
+    # empty or start like an extension (key=). A header shifted while
+    # keeping 8 parts leaves the real severity here, failing the shape.
+    if parts[7]:
+        assert re.match(r"[A-Za-z0-9_.]+=", parts[7]), (
+            f"extension does not start at the expected boundary: {parts[7]!r}"
+        )
     for field in parts[:7]:
         assert "\r" not in field and "\n" not in field, "CR/LF in CEF header"
 
@@ -140,15 +146,17 @@ def test_validate_and_strict_never_crash(line):
 
 
 def test_adaptive_cache_stays_bounded():
+    from itertools import product
+
     adaptive.clear_cache()
-    # Lines with a recognizable timestamp behind a prefix no built-in
-    # parser accepts, in rotating shapes: these actually exercise the
-    # adaptive engine's pattern synthesis and cache.
-    prefixes = ["#", "@", "::", "--", "~", ";;", "!", "**", "..", "^"]
-    for i in range(2000):
-        prefix = prefixes[i % len(prefixes)] * (i % 4 + 1)
-        convert_line(f"{prefix} Aug 11 07:00:{i % 60:02d} host{i} payload number {i}")
-    # Guard against vacuity: the loop must have populated the cache ...
-    assert adaptive.cache_size() > 0, "test lines never reached the adaptive engine"
-    # ... and the cache must stay at or below its documented cap.
-    assert adaptive.cache_size() <= adaptive._CACHE_MAX
+    # The shape signature keeps punctuation verbatim (letters -> A,
+    # digits -> 9), so a punctuation-product first token yields 343
+    # distinct signatures — beyond the 256-entry cap — with a
+    # recognizable timestamp so every line reaches the adaptive engine.
+    puncts = ["#", "@", "~", "^", "!", ";", ":"]
+    for p1, p2, p3 in product(puncts, repeat=3):
+        convert_line(f"{p1}x{p2}7{p3} Aug 11 07:00:00 host9 payload event")
+    # The cap must actually be reached (eviction exercised, not merely
+    # never triggered) and held exactly — more than 343 entries or an
+    # unbounded cache would exceed it.
+    assert adaptive.cache_size() == adaptive._CACHE_MAX

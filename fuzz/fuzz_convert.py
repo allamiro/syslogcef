@@ -11,6 +11,7 @@ never raise, and must return structurally valid CEF for every input.
 Seed the corpus from tests/ sample lines for much better coverage.
 """
 
+import re
 import sys
 
 import atheris
@@ -44,10 +45,13 @@ def one_input(data: bytes) -> None:
     line = fdp.ConsumeUnicodeNoSurrogates(4096)
     cef = convert_line(line)
     parts = _split_unescaped_pipes(cef)
-    if len(parts) < 8 or parts[0] != "CEF:0":
+    # The renderer escapes pipes everywhere, so exactly 8 parts.
+    if len(parts) != 8 or parts[0] != "CEF:0":
         raise AssertionError(f"structurally invalid CEF for input {line[:80]!r}")
     if not parts[6].isdigit():
         raise AssertionError(f"non-numeric severity field for input {line[:80]!r}")
+    if parts[7] and not re.match(r"[A-Za-z0-9_.]+=", parts[7]):
+        raise AssertionError(f"bad extension boundary for input {line[:80]!r}")
     for field in parts[:7]:
         if "\r" in field or "\n" in field:
             raise AssertionError(f"CR/LF in CEF header for input {line[:80]!r}")
