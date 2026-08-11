@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-11
+
+### Added
+
+- The CEF field dictionary (`syslogcef/dictionary.json`): 176 keys with
+  type, maximum length, and producer/consumer scope (including the full
+  Event Consumers table and the CEF 1.2 fields), plus 56 source-field
+  aliases (`srcip` -> `src`, `dstport` -> `dpt`, `user` -> `suser`,
+  `rcvdbyte`/`sentbyte` -> `in`/`out`, ...) applied during
+  normalization for every event — including adaptively-parsed unknown
+  formats — so mappings and validation always see canonical CEF keys.
+
 ### Changed
 
 - The built-in fallback mapping carries the raw line as `cs1` +
@@ -15,10 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that producers must not set consumer-side fields. Downstream content
   keyed on `rawEvent=` in default-mapped output must read `cs1=`.
 - `--validate`/`--strict` warn (non-fatally) when producer output sets
-  a consumer-side CEF key; field types/lengths/scopes and ~56 source
-  field aliases (srcip -> src, dstport -> dpt, ...) now live in a
-  shared `dictionary.json` consulted by validation and normalization,
-  including for adaptively-parsed events.
+  a consumer-side CEF key, and validate the CEF 1.2 fields' types and
+  lengths; the validation table is loaded from the shared dictionary.
+- A custom mapping overriding either member of the default
+  `cs1`/`cs1Label` pair drops both defaults, so custom values are never
+  mislabeled `rawEvent`.
 
 ## [0.1.6] - 2026-08-11
 
@@ -216,7 +229,8 @@ Initial release.
 - `--tail` now follows all given input files instead of blocking on the
   first one.
 
-[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/allamiro/syslogcef/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/allamiro/syslogcef/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/allamiro/syslogcef/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/allamiro/syslogcef/compare/v0.1.3...v0.1.4
