@@ -64,7 +64,7 @@ RFC5424_RE = re.compile(
 )
 
 RSYSLOG_FILE_RE = re.compile(
-    r"^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2}))\s"
+    r"^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}(?::?\d{2})?))\s"
     r"(?P<host>[^\s]+)\s"
     r"(?P<tag>[\w\-/\.]+)(?:\[(?P<pid>[^\]]+)\])?:\s?"
     r"(?P<msg>.*)$"
@@ -75,14 +75,14 @@ JOURNALCTL_SHORT_RE = re.compile(
     r"(?P<day>\d{1,2})\s"
     r"(?P<time>\d{2}:\d{2}:\d{2})\s"
     r"(?P<host>[^\s]+)\s"
-    r"(?P<tag>[^:]+):\s?"
+    r"(?P<tag>[^:\[]+)(?:\[(?P<pid>[^\]]+)\])?:\s?"
     r"(?P<msg>.*)$"
 )
 
 JOURNALCTL_ISO_RE = re.compile(
-    r"^(?P<timestamp>\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?)(?:Z|[+-]\d{2}:?\d{2})?)\s"
+    r"^(?P<timestamp>\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?)(?:Z|[+-]\d{2}(?::?\d{2})?)?)\s"
     r"(?P<host>[^\s]+)\s"
-    r"(?P<tag>[^:]+):\s?"
+    r"(?P<tag>[^:\[]+)(?:\[(?P<pid>[^\]]+)\])?:\s?"
     r"(?P<msg>.*)$"
 )
 
@@ -106,7 +106,7 @@ CISCO_SEQ_RE = re.compile(
 # ISO timestamp syslog without RFC5424 framing: <PRI>ISO host [tag[pid]:] msg
 ISO_SYSLOG_RE = re.compile(
     r"^(?:<(?P<pri>\d+)>)?"
-    r"(?P<timestamp>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\s+"
+    r"(?P<timestamp>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}(?::?\d{2})?)?)\s+"
     r"(?P<host>[^\s]+?):?\s+"
     r"(?:(?P<tag>[\w\-/\.]+)(?:\[(?P<pid>[^\]]+)\])?:\s?)?"
     r"(?P<msg>.*)$"
@@ -503,7 +503,7 @@ def parse_journalctl_short(line: str, *, now: Optional[datetime]) -> ParsedEvent
         ts_orig=f"{gd['month']} {gd['day']} {gd['time']}",
         host=gd.get("host"),
         app=gd.get("tag"),
-        pid=None,
+        pid=gd.get("pid"),
         msgid=None,
         sd={},
         msg=gd.get("msg", ""),
@@ -526,7 +526,7 @@ def parse_journalctl_iso(line: str) -> ParsedEvent | None:
         ts_orig=gd["timestamp"],
         host=gd.get("host"),
         app=gd.get("tag"),
-        pid=None,
+        pid=gd.get("pid"),
         msgid=None,
         sd={},
         msg=gd.get("msg", ""),

@@ -56,7 +56,7 @@ def _dmy_dash(match: "re.Match[str]", now: Optional[datetime]) -> datetime:
 
 
 TIMESTAMP_LIB: Tuple[Tuple[str, str, Callable], ...] = (
-    ("iso", r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?", _iso),
+    ("iso", r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}(?::?\d{2})?)?", _iso),
     ("mon_day_year", r"(?P<month>[A-Z][a-z]{2})\s+(?P<day>\d{1,2})\s+(?P<year>\d{4})\s+(?P<hms>\d{2}:\d{2}:\d{2})(?:\.\d+)?", _mon_day),
     ("mon_day", r"(?P<month>[A-Z][a-z]{2})\s+(?P<day>\d{1,2})\s+(?P<hms>\d{2}:\d{2}:\d{2})(?:\.\d+)?", _mon_day),
     ("ymd_slash", r"(?P<y>\d{4})/(?P<m>\d{2})/(?P<d>\d{2})[ T](?P<hms>\d{2}:\d{2}:\d{2})", _ymd_slash),
@@ -70,6 +70,11 @@ TIMESTAMP_LIB: Tuple[Tuple[str, str, Callable], ...] = (
 
 HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _SKIP_HOST_TOKENS = {"error", "warning", "info", "debug", "notice", "kernel"}
+
+# Syslog-style program tag following the host: "app:", "app[pid]:".
+TAG_RE = re.compile(r"^(?P<app>[\w\-/\.]+)(?:\[(?P<pid>[^\]]+)\])?:$")
+# The same shape as a regex fragment for synthesized patterns.
+_TAG_SRC = r"(?:(?P<adaptive_app>[\w\-/\.]+)(?:\[(?P<adaptive_pid>[^\]]+)\])?:\s+)?"
 
 
 def _valid_host(candidate: Optional[str]) -> bool:
@@ -109,7 +114,7 @@ def cache_size() -> int:
     return len(_CACHE)
 
 
-def _build_event(line, pri, ts, host, msg):
+def _build_event(line, pri, ts, host, msg, app=None, pid=None):
     from .parsers import ParsedEvent
 
     facility, severity = convert_pri(pri)
@@ -120,8 +125,8 @@ def _build_event(line, pri, ts, host, msg):
         ts=ts,
         ts_orig="",
         host=host,
-        app=None,
-        pid=None,
+        app=app,
+        pid=pid,
         msgid=None,
         sd={},
         msg=sanitize_message(msg),
@@ -152,14 +157,17 @@ def adaptive_parse(line: str, *, now: Optional[datetime] = None):
                 ts = None
             gd = match.groupdict()
             host = gd.get("adaptive_host")
+            app = gd.get("adaptive_app")
+            pid = gd.get("adaptive_pid")
             msg = gd.get("adaptive_msg")
             msg = line if msg is None else msg
             # The shape signature reduces all words to the same class, so a
             # cached host slot may capture a non-host token; revalidate.
             if host is not None and not _valid_host(host.rstrip(":,")):
-                msg = f"{host} {msg}".strip()
-                host = None
-            return _build_event(raw, pri, ts, host, msg)
+                tag = f"{app}[{pid}]: " if app and pid else (f"{app}: " if app else "")
+                msg = f"{host} {tag}{msg}".strip()
+                host = app = pid = None
+            return _build_event(raw, pri, ts, host, msg, app=app, pid=pid)
 
     # Analysis pass: find the earliest timestamp in the line head.
     best = None
@@ -176,9 +184,13 @@ def adaptive_parse(line: str, *, now: Optional[datetime] = None):
         return None
 
     # Host candidate: the first plausible token after the timestamp that is
-    # not a key=value pair or severity word.
+    # not a key=value pair or severity word. A leading timezone remnant the
+    # timestamp library could not consume (a lone "+02"/"CEST") must not be
+    # mistaken for the host — such tokens fail _valid_host and stay in msg.
     rest = line[ts_match.end():].lstrip(" :,\t")
     host = None
+    app = None
+    pid = None
     msg = rest
     tokens = rest.split(None, 1)
     if tokens:
@@ -186,12 +198,23 @@ def adaptive_parse(line: str, *, now: Optional[datetime] = None):
         if _valid_host(candidate):
             host = candidate
             msg = tokens[1] if len(tokens) > 1 else ""
+            # Program tag after the host ("app:" / "app[pid]:"): split it
+            # off so it maps to the CEF process field instead of polluting
+            # the message.
+            tag_tokens = msg.split(None, 1)
+            if tag_tokens:
+                tag_match = TAG_RE.match(tag_tokens[0])
+                if tag_match:
+                    app = tag_match.group("app")
+                    pid = tag_match.group("pid")
+                    msg = tag_tokens[1] if len(tag_tokens) > 1 else ""
 
     # Synthesize and cache a pattern for this layout.
     prefix = line[: ts_match.start()]
     parts = [re.escape(prefix), f"(?P<adaptive_ts>{src})", r"[\s:,]*"]
     if host is not None:
         parts.append(r"(?P<adaptive_host>\S+?):?(?:\s+|$)")
+        parts.append(_TAG_SRC)
     parts.append(r"(?P<adaptive_msg>.*)$")
     try:
         pattern = re.compile("".join(parts))
@@ -202,7 +225,7 @@ def adaptive_parse(line: str, *, now: Optional[datetime] = None):
             _CACHE.pop(next(iter(_CACHE)))
         _CACHE[sig] = (pattern, name, conv)
 
-    return _build_event(raw, pri, ts, host, msg)
+    return _build_event(raw, pri, ts, host, msg, app=app, pid=pid)
 
 
 def pattern_ts_match(pattern: Pattern[str], match: "re.Match[str]"):

@@ -28,6 +28,9 @@ DEFAULT_MAPPING = {
     },
     "extensions": {
         "msg": "%(msg)s",
+        # Event time (epoch milliseconds) parsed from the line, or the
+        # processing time when the line carried no usable timestamp.
+        "rt": "%(rt)s",
         # The raw line travels in a labeled custom string: rawEvent is a
         # consumer-side key producers must not set (see docs/cef_fields.md),
         # and every bundled mapping already uses this shape.

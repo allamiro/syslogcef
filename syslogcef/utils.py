@@ -40,6 +40,10 @@ SEVERITY_WORDS = {
 UTF8_REPLACEMENT_CHAR = "\uFFFD"
 _NUL = "\x00"
 
+# A trailing "+HH", "+HHMM", or "+HH:MM" offset, required to follow a
+# time-of-day component so a bare "2026-07" is never treated as offset.
+_TZ_OFFSET_RE = re.compile(r"^(.*\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?)([+-]\d{2}):?(\d{2})?$")
+
 
 def month_abbr_to_int(abbr: str) -> int:
     try:
@@ -83,6 +87,13 @@ def parse_iso8601(value: str) -> datetime:
         raise ValueError(f"ambiguous epoch precision ({digits} digits): {value!r}")
     if value.endswith("Z"):
         value = value[:-1] + "+00:00"
+    # Normalize compact UTC offsets ("+02", "+0200") to "+02:00": macOS
+    # install.log stamps hour-only offsets, and Python < 3.11
+    # fromisoformat only accepts the colon form.
+    offset_match = _TZ_OFFSET_RE.match(value)
+    if offset_match:
+        head, hours, minutes = offset_match.groups()
+        value = f"{head}{hours}:{minutes or '00'}"
     try:
         return datetime.fromisoformat(value)
     except ValueError as exc:

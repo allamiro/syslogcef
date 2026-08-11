@@ -10,7 +10,7 @@ from multiprocessing import Pool, cpu_count
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Optional
 
-from .api import convert_line
+from .api import StreamConverter, convert_line
 
 logger = logging.getLogger(__name__)
 
@@ -341,8 +341,12 @@ def process_lines(
             for cef in pool.imap(worker, lines):
                 yield cef
     else:
+        # Stateful conversion so whitespace-indented continuation lines
+        # inherit host/app/timestamp from the preceding event. Unavailable
+        # under --multiprocess, where workers cannot share line order.
+        converter = StreamConverter(mode=mode, mapping=mapping, validate=validate, strict=strict)
         for line in lines:
-            yield convert_line(line, mode=mode, mapping=mapping, validate=validate, strict=strict)
+            yield converter.convert(line)
 
 
 def _optional_path(value: str) -> Optional[Path]:
