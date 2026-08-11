@@ -20,9 +20,46 @@ LogsDirectory=syslogcef
 #   SupplementaryGroups=adm
 # AmbientCapabilities keeps ports <1024 bindable for a non-root User=.
 AmbientCapabilities=CAP_NET_BIND_SERVICE
+# Sandboxing (#91): shrink the blast radius of a parser or dependency
+# defect. These are safe for the default root file-reading config; the
+# capability bounding set keeps only CAP_NET_BIND_SERVICE (needed for
+# ports <1024 when a non-root User= is set).
 NoNewPrivileges=yes
 PrivateTmp=yes
+PrivateDevices=yes
 ProtectHome=read-only
+# full (not strict): keep /usr,/boot,/etc read-only but leave the rest
+# of the filesystem writable, so a custom OUTPUT_FILE outside
+# /var/log/syslogcef (e.g. /srv/cef/events.cef) still works. Opt into
+# strict with an explicit ReadWritePaths= override if desired.
+ProtectSystem=full
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Root reads logs owned by other accounts (mode 0600), which needs the
+# DAC capabilities; dropping them would defeat the default config's
+# purpose. CAP_NET_BIND_SERVICE stays for ports <1024.
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# Resource ceilings so a runaway pipeline cannot starve the host:
+MemoryMax=1G
+# Generous enough for --multiprocess (a worker pool of ~CPU count plus
+# helper threads) on large hosts, while still bounding a fork bomb.
+TasksMax=512
+# To drop privileges (recommended for pure network mode), override with:
+#   User=syslogcef
+#   SupplementaryGroups=adm systemd-journal
+# The packaged 'syslogcef' system user (sysusers.d) exists for this.
 
 [Install]
 WantedBy=multi-user.target

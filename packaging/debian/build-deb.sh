@@ -16,6 +16,7 @@ mkdir -p \
   "$STAGE/lib/systemd/system" \
   "$STAGE/etc/syslogcef/conf.d" \
   "$STAGE/etc/logrotate.d" \
+  "$STAGE/usr/lib/sysusers.d" \
   "$STAGE/usr/share/doc/syslogcef" \
   "$STAGE/usr/share/man/man1"
 
@@ -25,6 +26,7 @@ install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef@.service" "$STAGE/lib/system
 install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef.conf" "$STAGE/etc/syslogcef/syslogcef.conf"
 install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef-instance.conf" "$STAGE/etc/syslogcef/conf.d/example.conf.sample"
 install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef.logrotate" "$STAGE/etc/logrotate.d/syslogcef"
+install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef.sysusers" "$STAGE/usr/lib/sysusers.d/syslogcef.conf"
 install -m 0644 "$REPO_ROOT/README.md" "$REPO_ROOT/LICENSE" "$REPO_ROOT/CHANGELOG.md" "$STAGE/usr/share/doc/syslogcef/"
 install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef.1" "$STAGE/usr/share/man/man1/syslogcef.1"
 gzip -9n "$STAGE/usr/share/man/man1/syslogcef.1"
@@ -55,6 +57,16 @@ printf '%s\n' /etc/syslogcef/syslogcef.conf /etc/logrotate.d/syslogcef > "$STAGE
 cat > "$STAGE/DEBIAN/postinst" <<'EOF'
 #!/bin/sh
 set -e
+# Create the syslogcef system user from the shipped sysusers.d file.
+# Installing the file is not enough — systemd-sysusers.service only runs
+# at boot — so process it now (with a useradd fallback for non-systemd).
+if command -v systemd-sysusers >/dev/null 2>&1; then
+    systemd-sysusers /usr/lib/sysusers.d/syslogcef.conf >/dev/null 2>&1 || true
+elif ! getent passwd syslogcef >/dev/null 2>&1; then
+    useradd --system --home-dir /var/log/syslogcef --no-create-home \
+        --shell /usr/sbin/nologin \
+        --comment "syslogcef syslog to CEF converter" syslogcef >/dev/null 2>&1 || true
+fi
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || true
 fi

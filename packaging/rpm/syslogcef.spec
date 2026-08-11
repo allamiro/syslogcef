@@ -12,6 +12,7 @@ Source3:        syslogcef.1
 Source4:        syslogcef@.service
 Source5:        syslogcef-instance.conf
 Source6:        syslogcef.logrotate
+Source7:        syslogcef.sysusers
 
 # EPEL 9's default Python (3.9) ships setuptools 53, too old for PEP 621
 # metadata, so build against the python3.11 stack there.
@@ -50,10 +51,14 @@ install -D -m 0644 %{SOURCE3} %{buildroot}%{_mandir}/man1/syslogcef.1
 install -D -m 0644 %{SOURCE4} %{buildroot}%{_unitdir}/syslogcef@.service
 install -D -m 0644 %{SOURCE5} %{buildroot}%{_sysconfdir}/syslogcef/conf.d/example.conf.sample
 install -D -m 0644 %{SOURCE6} %{buildroot}%{_sysconfdir}/logrotate.d/syslogcef
+install -D -m 0644 %{SOURCE7} %{buildroot}%{_sysusersdir}/syslogcef.conf
 
 %check
 %pyproject_check_import syslogcef
 %pytest
+
+%pre
+%sysusers_create_compat %{SOURCE7}
 
 %post
 %systemd_post syslogcef.service
@@ -79,6 +84,7 @@ install -D -m 0644 %{SOURCE6} %{buildroot}%{_sysconfdir}/logrotate.d/syslogcef
 %config(noreplace) %{_sysconfdir}/syslogcef/syslogcef.conf
 %config(noreplace) %{_sysconfdir}/syslogcef/conf.d/example.conf.sample
 %config(noreplace) %{_sysconfdir}/logrotate.d/syslogcef
+%{_sysusersdir}/syslogcef.conf
 
 %changelog
 * Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.2.1-1
