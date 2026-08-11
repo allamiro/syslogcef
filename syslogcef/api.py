@@ -120,6 +120,57 @@ def convert_line(
     return to_cef(normalized, mapping, validate=validate, strict=strict)
 
 
+class StreamConverter:
+    """Stateful converter for an ordered stream of syslog lines.
+
+    Multi-line records (macOS install.log, wrapped plist/JSON payloads in
+    Apple system logs, Java stack traces) continue onto lines that begin
+    with whitespace and carry no syslog header of their own. Converted in
+    isolation such a line gets no timestamp and the local machine's
+    hostname — inside a container that is the container ID, not the host
+    that produced the log. Here a whitespace-indented line instead
+    inherits host, app, pid, PRI, and timestamp from the most recent
+    fully-parsed event and is tagged ``source_hint="continuation"``. One
+    CEF record is still emitted per input line.
+    """
+
+    def __init__(
+        self,
+        *,
+        mode: Optional[str] = None,
+        mapping: Mapping[str, Any] | Path | str | None = None,
+        validate: bool = False,
+        strict: bool = False,
+    ) -> None:
+        self.mode = mode
+        self.mapping = mapping
+        self.validate = validate
+        self.strict = strict
+        self._context: Optional[ParsedEvent] = None
+
+    def convert(self, line: str, *, now: Optional[datetime] = None) -> str:
+        parsed = parse_syslog(line, mode=self.mode, now=now)
+        if line[:1] in ("\t", " ") and self._context is not None:
+            ctx = self._context
+            parsed.host = ctx.host
+            parsed.app = parsed.app or ctx.app
+            parsed.pid = parsed.pid or ctx.pid
+            if parsed.ts is None:
+                parsed.ts = ctx.ts
+            if parsed.pri is None:
+                parsed.pri = ctx.pri
+                parsed.facility = ctx.facility
+                parsed.severity = ctx.severity
+            parsed.msg = parsed.msg.lstrip()
+            parsed.source_hint = "continuation"
+        elif parsed.host is not None and parsed.source_hint != "unknown":
+            # Only a line whose host was actually parsed (not the
+            # guessed fallback) may become continuation context.
+            self._context = parsed
+        normalized = normalize_event(parsed)
+        return to_cef(normalized, self.mapping, validate=self.validate, strict=self.strict)
+
+
 def _guess_mapping(event: NormalizedEvent) -> Mapping[str, Any]:
     msg_upper = event.msg.upper()
     app_upper = (event.app or "").upper()
@@ -148,6 +199,7 @@ __all__ = [
     "ParsedEvent",
     "NormalizedEvent",
     "ParseResult",
+    "StreamConverter",
     "convert_line",
     "normalize_event",
     "parse_syslog",

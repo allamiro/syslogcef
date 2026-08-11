@@ -9,10 +9,11 @@ conversion workflow.
 """
 from __future__ import annotations
 
-from .api import convert_line, normalize_event, parse_syslog, to_cef
+from .api import StreamConverter, convert_line, normalize_event, parse_syslog, to_cef
 from .custom import PatternFileError, load_patterns, register_parser
 
 __all__ = [
+    "StreamConverter",
     "convert_line",
     "normalize_event",
     "parse_syslog",

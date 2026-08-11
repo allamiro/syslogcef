@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Event time in the CEF output: every event now carries `rt=` (epoch
+  milliseconds) from the parsed timestamp, or the processing time when
+  the line had no usable timestamp. The bundled Linux mapping also
+  emits `dvcpid=` for the syslog tag's pid.
+- Continuation-line handling for multi-line records (macOS install.log
+  and system.log wrapped payloads, stack traces): whitespace-indented
+  lines inherit host, program, pid, PRI, and timestamp from the
+  preceding event instead of getting the local machine's hostname —
+  which, inside a container, was the container ID. Available in the
+  sequential CLI pipeline and as `syslogcef.StreamConverter`; not
+  applied under `--multiprocess`.
+- The adaptive parser now recognizes a syslog program tag
+  (`app:` / `app[pid]:`) after the host token and maps it to the
+  process/pid fields instead of leaving it in the message, on both the
+  first-sight analysis and the cached-pattern path.
+
+### Fixed
+
+- Compact UTC offsets as written by macOS install.log
+  (`2026-07-20 03:23:05+02`) and colonless offsets (`+0200`) parse
+  correctly in the ISO syslog, rsyslog-file, and journald-ISO formats
+  and in `parse_iso8601` — including on Python 3.9/3.10, where
+  `fromisoformat` only accepts the `+02:00` form. Previously such
+  lines fell through to the adaptive parser, which lost the hostname
+  and program because the stray `+02` token blocked host detection.
+- `journald_short` and `journald_iso` split `app[pid]:` tags into
+  program and pid instead of reporting `opendirectoryd[69]` as the
+  program name.
+
 ## [0.2.1] - 2026-08-11
 
 ### Fixed

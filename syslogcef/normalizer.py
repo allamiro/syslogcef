@@ -45,7 +45,7 @@ class NormalizedEvent(ParsedEvent):
 
 
 def normalize(event: ParsedEvent) -> NormalizedEvent:
-    ts = ensure_tzaware(event.ts)
+    ts = ensure_tzaware(event.ts) or datetime.now(timezone.utc)
     msg = sanitize_message(event.msg)
     kv = parse_key_value_pairs(msg)
 
@@ -54,6 +54,8 @@ def normalize(event: ParsedEvent) -> NormalizedEvent:
         "message_short": msg[:120],
         "raw": event.raw,
         "raw_kv": " ".join(f"{k}={v}" for k, v in kv.items()),
+        # Event time as epoch milliseconds for the CEF rt field.
+        "rt": str(int(ts.timestamp() * 1000)),
     }
 
     if event.source_hint in {"rfc3164", "rsyslog", "journald"} and event.host is None:
@@ -63,7 +65,7 @@ def normalize(event: ParsedEvent) -> NormalizedEvent:
         pri=event.pri,
         facility=event.facility,
         severity=event.severity,
-        ts=ts or datetime.now(timezone.utc),
+        ts=ts,
         ts_orig=event.ts_orig,
         host=event.host,
         app=event.app,
