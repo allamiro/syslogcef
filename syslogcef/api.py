@@ -68,7 +68,16 @@ def _load_mapping(mapping: Mapping[str, Any] | Path | str | None) -> Mapping[str
         return mapping
     path = Path(mapping)
     with path.open("r", encoding="utf-8") as fp:
-        return json.load(fp)
+        data = json.load(fp)
+    # Structural validation with clear messages: a top-level array would
+    # otherwise TypeError deep inside the renderer, and a wrong-shaped
+    # extensions/severity_map would fail per event instead of up front.
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: mapping must be a JSON object")
+    for key in ("extensions", "severity_map"):
+        if key in data and not isinstance(data[key], dict):
+            raise ValueError(f"{path}: '{key}' must be a JSON object")
+    return data
 
 
 def to_cef(

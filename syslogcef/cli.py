@@ -8,7 +8,7 @@ from datetime import datetime
 from functools import partial
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
-from typing import Iterable, Iterator, Optional
+from typing import Any, Iterable, Iterator, Optional
 
 from .api import convert_line
 
@@ -173,7 +173,7 @@ def write_lines(
             fp.close()
 
 
-def _convert_line_mp(line: str, mode: Optional[str], mapping: Optional[str], validate: bool = False, strict: bool = False) -> str:
+def _convert_line_mp(line: str, mode: Optional[str], mapping: Any, validate: bool = False, strict: bool = False) -> str:
     return convert_line(line, mode=mode, mapping=mapping, validate=validate, strict=strict)
 
 
@@ -193,7 +193,7 @@ def process_lines(
     lines: Iterable[str],
     *,
     mode: Optional[str],
-    mapping: Optional[str],
+    mapping: Any,
     use_multiprocessing: bool,
     pool_size: Optional[int],
     validate: bool = False,
@@ -238,6 +238,20 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=getattr(logging, args.log_level.upper(), logging.WARNING))
 
+    # Reject invalid option combinations before any file, socket, or
+    # pool side effects (#89): mistakes in service environment files
+    # must fail with a clear message, not a traceback or silence.
+    if args.pool_size is not None and not args.multiprocess:
+        parser.error("--pool-size requires --multiprocess")
+    if args.multiprocess and args.pool_size is not None and args.pool_size < 1:
+        parser.error(f"--pool-size must be a positive integer (got {args.pool_size})")
+    if args.eps is not None and not args.send:
+        parser.error("--eps requires --send")
+    if args.listen and args.paths:
+        parser.error("--listen replaces file input; remove the positional paths")
+    if args.tail and not args.paths:
+        parser.error("--tail requires input file paths")
+
     if args.output:
         try:
             template_has_codes(str(args.output))
@@ -260,7 +274,25 @@ def main(argv: Optional[list[str]] = None) -> int:
         if args.mode not in PARSERS and get_registered(args.mode) is None:
             parser.error(f"unknown --mode '{args.mode}' (not a built-in parser or a loaded pattern name)")
 
-    mapping = args.mapping
+    # Load and validate the mapping eagerly (#84): a missing or malformed
+    # file must fail before the output is opened — a truncate-mode open
+    # would destroy an existing archive before the lazy first-event load
+    # ever ran. Loading once here also avoids re-reading the JSON file
+    # for every converted line.
+    mapping = None
+    if args.mapping is not None:
+        # An explicitly empty --mapping (e.g. MAPPING= blank in a service
+        # environment file) is a misconfiguration, not "use the default":
+        # silently proceeding would truncate an existing --output with an
+        # unintended mapping. Fail before any file is opened.
+        if not args.mapping.strip():
+            parser.error("--mapping was given an empty value")
+        from .api import _load_mapping
+
+        try:
+            mapping = _load_mapping(args.mapping)
+        except (OSError, ValueError) as exc:
+            parser.error(f"invalid --mapping: {exc}")
 
     outputs: Iterator[str]
     if args.listen:
