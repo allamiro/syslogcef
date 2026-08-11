@@ -1,5 +1,5 @@
 Name:           syslogcef
-Version:        0.1.3
+Version:        0.1.4
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -67,6 +67,13 @@ install -D -m 0644 %{SOURCE3} %{buildroot}%{_mandir}/man1/syslogcef.1
 %config(noreplace) %{_sysconfdir}/syslogcef/syslogcef.conf
 
 %changelog
+* Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.1.4-1
+- Cap TCP listener buffers; drop flooding connections
+- Surface asynchronous Kafka delivery failures; fix EPS edge cases
+- Stricter CEF validation: IPv4-only fields, oldFile keys, real
+  timestamp parsing
+- Correct man page and unit privilege documentation
+
 * Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.1.3-1
 - Receive syslog over the network (--listen udp/tcp)
 - Forward CEF to a SIEM (--send udp/tcp, optional kafka) with --eps
