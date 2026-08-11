@@ -1,5 +1,5 @@
 Name:           syslogcef
-Version:        0.2.1
+Version:        0.3.0
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -87,6 +87,12 @@ install -D -m 0644 %{SOURCE7} %{buildroot}%{_sysusersdir}/syslogcef.conf
 %{_sysusersdir}/syslogcef.conf
 
 %changelog
+* Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.3.0-1
+- Parse macOS install.log compact UTC offsets (+02); split app[pid]
+  tags in journald formats; adaptive parser learns program tags
+- Continuation lines inherit host/app/pid/timestamp from the
+  preceding event; emit rt= event time and dvcpid= in CEF output
+
 * Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.2.1-1
 - Fix zipapp package-data loading (dictionary.json path, Python 3.9
   zipimport anchor); add a zipimport regression test
