@@ -12,6 +12,8 @@ import selectors
 import socket
 from typing import Callable, Iterator, Optional, Tuple
 
+import time as _time
+
 logger = logging.getLogger(__name__)
 
 MAX_DATAGRAM = 65535
@@ -20,6 +22,12 @@ MAX_DATAGRAM = 65535
 # able to grow its buffer without bound; connections exceeding this are
 # dropped.
 MAX_TCP_BUFFER = 1024 * 1024
+
+# Aggregate limits so many well-behaved-per-connection clients cannot
+# still exhaust memory or descriptors in total. New connections beyond
+# the cap are refused; a connection idle past the timeout is closed.
+MAX_TCP_CONNECTIONS = 512
+TCP_IDLE_TIMEOUT = 300.0  # seconds without any received data
 
 
 def parse_endpoint(spec: str) -> Tuple[str, str, int]:
@@ -96,18 +104,58 @@ def _listen_tcp(host, port, max_messages, ready_callback) -> Iterator[str]:
     sel = selectors.DefaultSelector()
     sel.register(server, selectors.EVENT_READ)
     buffers: dict[socket.socket, bytes] = {}
+    last_seen: dict[socket.socket, float] = {}
     count = 0
+    # -inf, not 0.0: within the first TCP_IDLE_TIMEOUT seconds of process
+    # uptime monotonic() is small, and a 0.0 seed would suppress the very
+    # first capacity warning. -inf guarantees the first refusal logs.
+    last_refuse_warn = float("-inf")
     try:
         while max_messages is None or count < max_messages:
+            # Reap idle connections between selects so a client that
+            # connects and goes silent cannot hold a slot forever.
+            # Tradeoff: a client totally silent for the full timeout that
+            # then resumes without reading may lose its first post-reap
+            # write (its sendall can succeed locally before a later write
+            # sees EPIPE). This is inherent to reaping and acceptable —
+            # syslog delivery is best-effort and TCP clients reconnect.
+            now = _time.monotonic()
+            for sock in [s for s, t in last_seen.items() if now - t > TCP_IDLE_TIMEOUT]:
+                logger.info("Closing idle connection after %.0fs", TCP_IDLE_TIMEOUT)
+                # Discard any buffered remainder: the receive loop already
+                # emitted every newline-terminated record, so whatever is
+                # left is an incomplete fragment of a record the (still
+                # connected) client paused midway through. Unlike the EOF
+                # path — where a client close signals the record is done —
+                # emitting a reap fragment would produce a truncated event.
+                sel.unregister(sock)
+                sock.close()
+                buffers.pop(sock, None)
+                last_seen.pop(sock, None)
             for key, _events in sel.select(timeout=1):
                 sock = key.fileobj
                 if sock is server:
                     conn, addr = server.accept()
+                    if len(buffers) >= MAX_TCP_CONNECTIONS:
+                        # At capacity: refuse rather than let aggregate
+                        # buffers/descriptors grow without bound. Warn at
+                        # most once per idle-timeout window so a flood of
+                        # reconnects cannot itself become a log-DoS.
+                        if now - last_refuse_warn > TCP_IDLE_TIMEOUT:
+                            logger.warning(
+                                "Refusing connections: at capacity (%d open)",
+                                len(buffers),
+                            )
+                            last_refuse_warn = now
+                        conn.close()
+                        continue
                     conn.setblocking(False)
                     sel.register(conn, selectors.EVENT_READ)
                     buffers[conn] = b""
+                    last_seen[conn] = _time.monotonic()
                     logger.debug("Connection from %s", addr)
                     continue
+                last_seen[sock] = _time.monotonic()
                 try:
                     data = sock.recv(65536)
                 except (BlockingIOError, InterruptedError):
@@ -118,6 +166,7 @@ def _listen_tcp(host, port, max_messages, ready_callback) -> Iterator[str]:
                     sel.unregister(sock)
                     sock.close()
                     remainder = buffers.pop(sock, b"")
+                    last_seen.pop(sock, None)
                     line = remainder.decode("utf-8", "replace").strip()
                     if line:
                         yield line
@@ -137,6 +186,7 @@ def _listen_tcp(host, port, max_messages, ready_callback) -> Iterator[str]:
                     sel.unregister(sock)
                     sock.close()
                     buffers.pop(sock, None)
+                    last_seen.pop(sock, None)
                     continue
                 while b"\n" in buffers[sock]:
                     raw, buffers[sock] = buffers[sock].split(b"\n", 1)
@@ -149,6 +199,7 @@ def _listen_tcp(host, port, max_messages, ready_callback) -> Iterator[str]:
     finally:
         for sock in list(buffers):
             sock.close()
+        last_seen.clear()
         sel.close()
         server.close()
 
@@ -159,7 +210,6 @@ __all__ = ["listen_lines", "parse_endpoint"]
 # --------------------------------------------------------------------------
 # Network output: forward CEF records to a SIEM or pipeline.
 
-import time as _time
 from urllib.parse import urlparse
 
 
