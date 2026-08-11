@@ -140,3 +140,95 @@ class TestEventTimeInOutput:
             datetime(2026, 7, 20, 3, 23, 5, tzinfo=timezone(timedelta(hours=2))).timestamp() * 1000
         )
         assert f"rt={expected_ms}" in cef
+
+
+class TestPerSourceContext:
+    """Continuation context must not leak across input sources (files)."""
+
+    def test_continuation_does_not_inherit_across_sources(self):
+        conv = StreamConverter()
+        conv.convert("May 28 16:04:52 MacBookPro opendirectoryd[69]: parent", source="a.log")
+        cef = conv.convert("\tindented start of another file", source="b.log")
+        assert "dhost=MacBookPro" not in cef
+
+    def test_each_source_keeps_its_own_context(self):
+        conv = StreamConverter()
+        conv.convert("May 28 16:04:52 host-a appa[1]: parent A", source="a.log")
+        conv.convert("May 28 16:04:53 host-b appb[2]: parent B", source="b.log")
+        # Interleaved continuations inherit from their own file.
+        cef_a = conv.convert("\tcontinuation for A", source="a.log")
+        cef_b = conv.convert("\tcontinuation for B", source="b.log")
+        assert "dhost=host-a" in cef_a and "sproc=appa" in cef_a
+        assert "dhost=host-b" in cef_b and "sproc=appb" in cef_b
+
+    def test_process_lines_tags_sources(self):
+        from syslogcef.cli import process_lines
+
+        items = [
+            ("a.log", "May 28 16:04:52 host-a appa[1]: parent A"),
+            ("b.log", "\tindented first line of file B"),
+        ]
+        out = list(
+            process_lines(items, mode=None, mapping=None, use_multiprocessing=False, pool_size=None)
+        )
+        assert "dhost=host-a" in out[0]
+        assert "dhost=host-a" not in out[1]
+
+
+class TestForcedModeContinuation:
+    """A forced --mode must inherit continuation lines, not abort on them."""
+
+    def test_forced_mode_continuation_inherits(self):
+        conv = StreamConverter(mode="journald_short")
+        parent = conv.convert("May 28 16:04:52 MacBookPro opendirectoryd[69]: parent event")
+        cont = conv.convert("\t    wrapped payload line")
+        assert "dhost=MacBookPro" in parent
+        assert "dhost=MacBookPro" in cont
+        assert "sproc=opendirectoryd" in cont
+
+    def test_forced_mode_still_rejects_non_continuations(self):
+        from syslogcef.parsers import ParserError
+
+        conv = StreamConverter(mode="journald_short")
+        with pytest.raises(ParserError):
+            conv.convert("not a journald line at all")
+
+    def test_forced_mode_indented_without_context_still_raises(self):
+        from syslogcef.parsers import ParserError
+
+        conv = StreamConverter(mode="journald_short")
+        with pytest.raises(ParserError):
+            conv.convert("\tindented but no preceding event")
+
+
+class TestDvcpidNumericOnly:
+    """dvcpid is an integer CEF field; non-numeric PROCIDs must not land there."""
+
+    def test_numeric_pid_emits_dvcpid(self):
+        from syslogcef import convert_line
+        from syslogcef.mappings import LINUX
+
+        cef = convert_line(
+            "<34>1 2026-07-20T03:23:05Z host1 myapp 4711 ID47 - message", mapping=LINUX
+        )
+        assert "dvcpid=4711" in cef
+
+    def test_nonnumeric_procid_omits_dvcpid(self):
+        from syslogcef import convert_line
+        from syslogcef.mappings import LINUX
+
+        cef = convert_line(
+            "<34>1 2026-07-20T03:23:05Z host1 myapp worker-A ID47 - message", mapping=LINUX
+        )
+        assert "dvcpid=" not in cef
+
+    def test_nonnumeric_procid_passes_strict_validation(self):
+        from syslogcef import convert_line
+        from syslogcef.mappings import LINUX
+
+        cef = convert_line(
+            "<34>1 2026-07-20T03:23:05Z host1 myapp worker-A ID47 - message",
+            mapping=LINUX,
+            strict=True,
+        )
+        assert cef.startswith("CEF:0|")

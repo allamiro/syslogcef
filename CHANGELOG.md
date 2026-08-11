@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Continuation context is scoped per input source: with several input
+  files (or several files tailed at once, which interleave), an
+  indented line now inherits host/app/timestamp only from its own
+  file's preceding event, never from another file's.
+- A forced `--mode` no longer aborts on whitespace-indented
+  continuation lines: with context available they inherit as in
+  auto-detect mode; without context the parser error is still raised.
+- `dvcpid=` is emitted only for numeric pids: RFC 5424 PROCID may be an
+  arbitrary string ("worker-A"), and the CEF dictionary types dvcpid as
+  an integer, so non-numeric identifiers previously produced invalid
+  output that `--strict` rejected. They remain available as `%(pid)s`.
+
 ## [0.3.0] - 2026-08-11
 
 ### Added
