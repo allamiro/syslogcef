@@ -140,11 +140,12 @@ def _year_with_rollover(parsed: datetime, ref: datetime) -> datetime:
 
     candidate = with_year(ref.year)
     if candidate is None:
-        for offset in (1, -1, 2, -2, 3, -3, 4, -4):
-            candidate = with_year(ref.year + offset)
-            if candidate is not None:
-                return candidate
-        return parsed
+        # Feb 29: pick the occurrence closest in time, not the first
+        # leap year found in either direction.
+        candidates = [c for off in range(-4, 5) if off and (c := with_year(ref.year + off))]
+        if not candidates:
+            return parsed
+        return min(candidates, key=lambda c: abs(c - ref))
     if candidate - ref > timedelta(days=180):
         return with_year(ref.year - 1) or candidate
     if ref - candidate > timedelta(days=180):

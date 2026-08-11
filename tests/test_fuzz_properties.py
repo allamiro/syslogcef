@@ -26,29 +26,20 @@ from __future__ import annotations
 import os
 import re
 import time
-from datetime import timedelta
 
 import pytest
 
 hypothesis = pytest.importorskip("hypothesis")
 
-from hypothesis import HealthCheck, given, settings, strategies as st  # noqa: E402
+from hypothesis import given, settings, strategies as st  # noqa: E402
 
 from syslogcef import convert_line  # noqa: E402
 from syslogcef import adaptive  # noqa: E402
 from syslogcef.validation import CEFValidationError  # noqa: E402
 
-# A 2s hypothesis deadline (rather than None) keeps a slow-but-passing
-# regression from silently draining the deep run's 60-minute job budget:
-# hypothesis fails fast and records the offending example instead. The
-# in-test 1s assertion below stays the primary, stricter budget.
-settings.register_profile(
-    "ci",
-    max_examples=200,
-    deadline=timedelta(seconds=2),
-    suppress_health_check=[HealthCheck.too_slow],
-)
-settings.register_profile("deep", max_examples=10_000, deadline=timedelta(seconds=2))
+# Profiles are registered centrally in conftest.py (a 2s deadline so a
+# slow-but-passing regression fails fast in the deep run instead of
+# draining the job budget); here we only load.
 settings.load_profile(os.environ.get("SYSLOGCEF_HYPOTHESIS_PROFILE", "ci"))
 
 # Real-world seed lines covering every parser family; mutations of these
