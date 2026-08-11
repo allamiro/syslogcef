@@ -1,5 +1,5 @@
 Name:           syslogcef
-Version:        0.3.0
+Version:        0.3.1
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -87,6 +87,10 @@ install -D -m 0644 %{SOURCE7} %{buildroot}%{_sysusersdir}/syslogcef.conf
 %{_sysusersdir}/syslogcef.conf
 
 %changelog
+* Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.3.1-1
+- Scope continuation context per input file; inherit continuations
+  under a forced --mode; emit dvcpid only for numeric pids
+
 * Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.3.0-1
 - Parse macOS install.log compact UTC offsets (+02); split app[pid]
   tags in journald formats; adaptive parser learns program tags
