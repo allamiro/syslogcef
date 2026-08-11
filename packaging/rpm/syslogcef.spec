@@ -32,7 +32,7 @@ that follows a configured log file and appends CEF output.
 %autosetup -n syslog2cef-%{version}
 
 %generate_buildrequires
-%pyproject_buildrequires
+%pyproject_buildrequires -x test
 
 %build
 %pyproject_wheel
@@ -47,6 +47,7 @@ install -D -m 0644 %{SOURCE3} %{buildroot}%{_mandir}/man1/syslogcef.1
 
 %check
 %pyproject_check_import syslogcef
+%pytest
 
 %post
 %systemd_post syslogcef.service
