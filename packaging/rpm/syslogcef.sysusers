@@ -1,0 +1,5 @@
+# A dedicated system user for least-privilege syslogcef deployments.
+# The packaged units run as root by default (to read arbitrary logs);
+# set User=syslogcef in a drop-in and add the groups that can read the
+# specific inputs you convert (e.g. adm, systemd-journal).
+u syslogcef - "syslogcef syslog to CEF converter" /var/log/syslogcef -

@@ -8,17 +8,28 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every supported CPython: the declared minimum (3.9), the
+        # release-build version (3.12), the container base (3.13), the newest
+        # stable CPython (3.14), and the versions between.
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install .[test,fuzz]
       - name: Run tests
+        # The suite includes tests/test_zipapp_safe.py, which imports the
+        # package from inside a zip archive — the package-data / zipimport
+        # smoke test that differs across versions (notably 3.9's legacy
+        # zipimport) — so every matrix Python exercises it here.
         run: pytest
 
   lint:
