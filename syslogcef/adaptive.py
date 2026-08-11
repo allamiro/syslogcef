@@ -61,7 +61,11 @@ TIMESTAMP_LIB: Tuple[Tuple[str, str, Callable], ...] = (
     ("mon_day", r"(?P<month>[A-Z][a-z]{2})\s+(?P<day>\d{1,2})\s+(?P<hms>\d{2}:\d{2}:\d{2})(?:\.\d+)?", _mon_day),
     ("ymd_slash", r"(?P<y>\d{4})/(?P<m>\d{2})/(?P<d>\d{2})[ T](?P<hms>\d{2}:\d{2}:\d{2})", _ymd_slash),
     ("dmy_dash", r"(?P<d>\d{1,2})-(?P<month>[A-Za-z]{3})-(?P<y>\d{4})\s+(?P<hms>\d{2}:\d{2}:\d{2})", _dmy_dash),
-    ("epoch", r"\b1\d{9}(?:\d{6})?\b", _epoch),
+    # 10/13/16/19 digits = seconds/ms/us/ns, matching parse_iso8601's
+    # precision dispatch (a bare 10-digit run only, then the optional
+    # ms/us/ns extensions), so adaptively-parsed epochs get the same
+    # correct scaling as the built-in parsers.
+    ("epoch", r"\b1\d{9}(?:\d{3}|\d{6}|\d{9})?\b", _epoch),
 )
 
 HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")

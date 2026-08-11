@@ -50,6 +50,9 @@ RFC3164_RE = re.compile(
     r"(?P<msg>.*)$"
 )
 
+# SD and MSG are separated by scanning, not regex: a greedy [.*] cannot
+# distinguish an escaped \] inside a param value from the element
+# terminator, and would swallow a ']' in the free-form message.
 RFC5424_RE = re.compile(
     r"^<(?P<pri>\d+)>(?P<version>\d)\s"
     r"(?P<timestamp>[^\s]+)\s"
@@ -57,8 +60,7 @@ RFC5424_RE = re.compile(
     r"(?P<app>[^\s]+)\s"
     r"(?P<procid>[^\s]+)\s"
     r"(?P<msgid>[^\s]+)\s"
-    r"(?P<sd>(?:-|\[.*\]))\s?"
-    r"(?P<msg>.*)$"
+    r"(?P<rest>.*)$"
 )
 
 RSYSLOG_FILE_RE = re.compile(
@@ -156,28 +158,87 @@ def _infer_timestamp(month: int, day: int, time_str: str, *, now: Optional[datet
     return candidate
 
 
-STRUCTURED_DATA_RE = re.compile(
-    r"\[(?P<id>[^\s\]]+)"  # identifier
-    r"(?P<body>(?:\s+[^=]+=\"[^\"]*\"|\s+[^=]+=[^\s\]]+)*)"  # key="value" or key=value
-    r"\]"
-)
-STRUCTURED_DATA_VALUE_RE = re.compile(r"\s+([^=]+)=(?:\"([^\"]*)\"|([^\s\]]+))")
-
-
 class ParserError(RuntimeError):
     pass
+
+
+def _scan_structured_data(text: str) -> tuple[Dict[str, Any], int]:
+    """Linear scan of RFC 5424 STRUCTURED-DATA at the start of ``text``.
+
+    Returns ``(sd_dict, end_index)``. Honors the RFC's PARAM-VALUE
+    escapes (``\\"``, ``\\\\``, ``\\]``), so an escaped quote or bracket
+    inside a value is data, not a terminator. Malformed input never
+    raises: scanning stops at the first invalid character and whatever
+    follows is left for the caller (typically as the message).
+    """
+    data: Dict[str, Any] = {}
+    i, n = 0, len(text)
+    while i < n and text[i] == "[":
+        j = i + 1
+        id_start = j
+        while j < n and text[j] not in " ]":
+            j += 1
+        sd_id = text[id_start:j]
+        if not sd_id:
+            break
+        # Accumulate this element's params locally and only merge them
+        # into the result once its closing ']' is confirmed, so a
+        # truncated element (e.g. `[e@1 role="admin"` with no ']') does
+        # not leak partial params into the output.
+        element: Dict[str, Any] = {}
+        params_ok = True
+        while j < n and text[j] == " ":
+            j += 1
+            # A space before the closing bracket ("[id a=\"1\" ]") is
+            # not a new parameter — stop scanning params.
+            if j < n and text[j] == "]":
+                break
+            name_start = j
+            while j < n and text[j] not in "= ]":
+                j += 1
+            if j >= n or text[j] != "=" or j == name_start:
+                params_ok = False
+                break
+            name = text[name_start:j]
+            j += 1
+            if j < n and text[j] == '"':
+                j += 1
+                buf: list = []
+                closed = False
+                while j < n:
+                    ch = text[j]
+                    if ch == "\\" and j + 1 < n and text[j + 1] in '"\\]':
+                        buf.append(text[j + 1])
+                        j += 2
+                        continue
+                    if ch == '"':
+                        closed = True
+                        j += 1
+                        break
+                    buf.append(ch)
+                    j += 1
+                if not closed:
+                    params_ok = False
+                    break
+                element[f"{sd_id}.{name}"] = "".join(buf)
+            else:
+                # Tolerate real-world unquoted values (iut=3): the RFC
+                # requires quoting, but the wild does not always comply.
+                bare_start = j
+                while j < n and text[j] not in " ]":
+                    j += 1
+                element[f"{sd_id}.{name}"] = text[bare_start:j]
+        if not params_ok or j >= n or text[j] != "]":
+            break
+        data.update(element)  # element closed cleanly — commit it
+        i = j + 1
+    return data, i
 
 
 def parse_structured_data(sd_raw: str) -> Dict[str, Any]:
     if sd_raw == "-":
         return {}
-    data: Dict[str, Any] = {}
-    for match in STRUCTURED_DATA_RE.finditer(sd_raw):
-        sd_id = match.group("id")
-        body = match.group("body")
-        for key, quoted, bare in STRUCTURED_DATA_VALUE_RE.findall(body):
-            value = quoted or bare
-            data[f"{sd_id}.{key}"] = value
+    data, _end = _scan_structured_data(sd_raw)
     return data
 
 
@@ -222,9 +283,25 @@ def parse_rfc5424(line: str) -> ParsedEvent | None:
     gd = match.groupdict()
     pri = int(gd["pri"]) if gd.get("pri") else None
     facility, severity = convert_pri(pri)
-    ts = parse_iso8601(gd["timestamp"])
-    sd = parse_structured_data(gd.get("sd") or "-")
-    msg = gd.get("msg", "")
+    # NILVALUE ("-") is a valid RFC 5424 timestamp meaning "unknown". A
+    # malformed or ambiguous value keeps ts=None rather than aborting the
+    # event (the never-drop-a-line contract, including forced mode).
+    ts = None
+    if gd["timestamp"] != "-":
+        try:
+            ts = parse_iso8601(gd["timestamp"])
+        except (ValueError, OverflowError, OSError):
+            ts = None
+    rest = gd.get("rest") or ""
+    if rest.startswith("["):
+        sd, end = _scan_structured_data(rest)
+        msg = rest[end:]
+        if msg.startswith(" "):
+            msg = msg[1:]
+    elif rest == "-" or rest.startswith("- "):
+        sd, msg = {}, rest[2:]
+    else:
+        sd, msg = {}, rest
     return ParsedEvent(
         pri=pri,
         facility=facility,
@@ -364,8 +441,28 @@ def parse_journalctl_json(line: str) -> ParsedEvent | None:
     pri_raw = data.get("PRIORITY") or data.get("priority")
     pri = int(pri_raw) if pri_raw is not None else None
     facility, severity = convert_pri(pri)
-    timestamp = data.get("__REALTIME_TIMESTAMP") or data.get("timestamp")
-    ts = parse_iso8601(timestamp) if timestamp else None
+    ts = None
+    ts_orig = str(data.get("__REALTIME_TIMESTAMP") or data.get("timestamp") or "")
+    realtime = data.get("__REALTIME_TIMESTAMP")
+    if realtime is not None and str(realtime).isdigit():
+        # journald's __REALTIME_TIMESTAMP is always microseconds since
+        # the epoch, regardless of digit count — a pre-2001 value has
+        # fewer than 16 digits, which parse_iso8601's precision dispatch
+        # would reject as ambiguous. Scale it explicitly.
+        try:
+            micros = int(realtime)
+            ts = datetime.fromtimestamp(micros // 1_000_000, tz=timezone.utc).replace(
+                microsecond=micros % 1_000_000
+            )
+        except (ValueError, OverflowError, OSError):
+            ts = None
+    else:
+        raw_ts = data.get("timestamp")
+        if raw_ts:
+            try:
+                ts = parse_iso8601(raw_ts)
+            except (ValueError, OverflowError, OSError):
+                ts = None
     # Coerce JSON scalars to str, as in parse_rsyslog_json.
     host = data.get("_HOSTNAME") or data.get("hostname")
     host = str(host) if host is not None else None
@@ -379,7 +476,7 @@ def parse_journalctl_json(line: str) -> ParsedEvent | None:
         facility=facility,
         severity=severity,
         ts=ts,
-        ts_orig=str(timestamp or ""),
+        ts_orig=ts_orig,
         host=host,
         app=app,
         pid=str(pid) if pid is not None else None,
@@ -540,7 +637,10 @@ def parse_kv_stream(line: str) -> ParsedEvent | None:
                 continue
     if ts is None and pairs.get("eventtime", "").isdigit():
         try:
-            ts = parse_iso8601(pairs["eventtime"][:16])
+            # Full value: parse_iso8601 dispatches on digit count
+            # (10/13/16/19), so Fortinet's 19-digit nanoseconds no
+            # longer need lossy [:16] truncation.
+            ts = parse_iso8601(pairs["eventtime"])
             ts_orig = pairs["eventtime"]
         except (ValueError, OverflowError, OSError):
             ts = None

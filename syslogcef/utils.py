@@ -60,11 +60,26 @@ def parse_iso8601(value: str) -> datetime:
         raise ValueError("Timestamp value is required")
     value = str(value)
     if value.isdigit():
-        micros = int(value)
-        if len(value) > 10:
-            seconds, micros = divmod(micros, 1_000_000)
+        # Interpret integer epochs by their conventional precision (#87):
+        # 10 digits = seconds, 13 = milliseconds, 16 = microseconds,
+        # 19 = nanoseconds (truncated to Python's microseconds). Other
+        # lengths are ambiguous and rejected rather than silently
+        # producing a date decades off (a 13-digit millisecond value
+        # previously parsed as microseconds, ~1000x too early).
+        digits = len(value)
+        number = int(value)
+        if digits <= 10:
+            return datetime.fromtimestamp(number, tz=timezone.utc)
+        if digits == 13:
+            seconds, millis = divmod(number, 1_000)
+            return datetime.fromtimestamp(seconds, tz=timezone.utc).replace(microsecond=millis * 1000)
+        if digits == 16:
+            seconds, micros = divmod(number, 1_000_000)
             return datetime.fromtimestamp(seconds, tz=timezone.utc).replace(microsecond=micros)
-        return datetime.fromtimestamp(int(value), tz=timezone.utc)
+        if digits == 19:
+            seconds, nanos = divmod(number, 1_000_000_000)
+            return datetime.fromtimestamp(seconds, tz=timezone.utc).replace(microsecond=nanos // 1000)
+        raise ValueError(f"ambiguous epoch precision ({digits} digits): {value!r}")
     if value.endswith("Z"):
         value = value[:-1] + "+00:00"
     try:
