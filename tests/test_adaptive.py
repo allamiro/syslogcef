@@ -2,7 +2,6 @@ from __future__ import annotations
 
 """Tests for the new format parsers and the adaptive pattern detector."""
 
-import pytest
 
 from syslogcef import convert_line, normalize_event, parse_syslog
 from syslogcef.adaptive import cache_size, clear_cache

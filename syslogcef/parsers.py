@@ -5,7 +5,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, Iterable, Mapping, MutableMapping, Optional, Tuple
+from typing import Any, Dict, Optional
 
 from .utils import (
     KEY_VALUE_RE,

@@ -9,9 +9,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install dependencies
@@ -20,3 +20,37 @@ jobs:
           pip install .[test]
       - name: Run tests
         run: pytest
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Ruff
+        run: |
+          pip install ruff
+          ruff check .
+      - name: ShellCheck packaging scripts
+        run: shellcheck packaging/debian/build-deb.sh
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+      - name: Build image
+        run: docker build -t syslogcef:ci .
+      - name: Smoke test image
+        run: |
+          out=$(echo '<166>Jan  1 12:34:56 router1 %ASA-6-302013: Built inbound TCP connection' | docker run --rm -i syslogcef:ci)
+          echo "$out"
+          case "$out" in
+            CEF:0*) ;;
+            *) echo "image did not produce CEF output" >&2; exit 1 ;;
+          esac

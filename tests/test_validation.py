@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from syslogcef import convert_line, normalize_event, parse_syslog, to_cef
+from syslogcef import convert_line
 from syslogcef.validation import CEFValidationError, validate_extensions
 
 

@@ -43,3 +43,11 @@ syslogcef = ["mappings/*.json"]
 [tool.pytest.ini_options]
 addopts = "-ra"
 pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py39"
+
+[tool.ruff.lint]
+# Start conservative: syntax errors and pyflakes (undefined names,
+# unused imports). Widen the selection as the codebase is cleaned up.
+select = ["E9", "F"]

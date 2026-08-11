@@ -1,0 +1,41 @@
+name: Triage
+
+on:
+  issues:
+    types: [opened]
+  # pull_request_target so fork PRs can be labeled/assigned too; no code
+  # from the PR is checked out or executed here.
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label pull request by changed paths
+        if: github.event_name == 'pull_request_target'
+        uses: actions/labeler@v5
+        with:
+          sync-labels: false
+
+      # Only on opened: re-running on synchronize/reopened would undo
+      # deliberate manual triage (e.g. unassigning or re-routing).
+      - name: Assign maintainer and ensure a label
+        if: github.event.action == 'opened'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const number = (context.payload.pull_request ?? context.payload.issue).number;
+            const { owner, repo } = context.repo;
+            const { data: item } = await github.rest.issues.get({ owner, repo, issue_number: number });
+            if (item.assignees.length === 0) {
+              await github.rest.issues.addAssignees({ owner, repo, issue_number: number, assignees: ['allamiro'] });
+            }
+            if (item.labels.length === 0) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels: ['needs-triage'] });
+            }
