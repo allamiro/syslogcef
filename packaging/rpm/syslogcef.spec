@@ -1,5 +1,5 @@
 Name:           syslogcef
-Version:        0.1.4
+Version:        0.1.5
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -81,6 +81,14 @@ install -D -m 0644 %{SOURCE6} %{buildroot}%{_sysconfdir}/logrotate.d/syslogcef
 %config(noreplace) %{_sysconfdir}/logrotate.d/syslogcef
 
 %changelog
+* Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.1.5-1
+- strftime-templated output paths (hourly/daily files, validated codes)
+- syslogcef@.service template unit with per-pipeline conf.d files
+- Logrotate snippet for flat CEF archives
+- Empty OUTPUT_FILE means stdout; unsplit ${OUTPUT_FILE} in units
+- User-defined parsers: --patterns pattern files and register_parser()
+- Run the full test suite during the RPM build checks
+
 * Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.1.4-1
 - Cap TCP listener buffers; drop flooding connections
 - Surface asynchronous Kafka delivery failures; fix EPS edge cases
