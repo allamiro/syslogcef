@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,11 @@ from .mappings import CISCO_ASA, CISCO_IOS, F5, FORTINET, LINUX, SOPHOS, VMWARE
 from .cef import CEFEvent, build_cef
 
 logger = logging.getLogger(__name__)
+
+_MAPPING_HEADER_KEYS = (
+    "deviceVendor", "deviceProduct", "deviceVersion", "eventClassId", "name"
+)
+_EXTENSION_KEY_RE = re.compile(r"^[A-Za-z0-9_.]+$")
 
 
 @dataclass
@@ -66,18 +72,49 @@ def _load_mapping(mapping: Mapping[str, Any] | Path | str | None) -> Mapping[str
     if mapping is None:
         return {}
     if isinstance(mapping, Mapping):
-        return mapping
-    path = Path(mapping)
-    with path.open("r", encoding="utf-8") as fp:
-        data = json.load(fp)
+        data = mapping
+        where = "mapping"
+    else:
+        path = Path(mapping)
+        with path.open("r", encoding="utf-8") as fp:
+            data = json.load(fp)
+        where = str(path)
     # Structural validation with clear messages: a top-level array would
     # otherwise TypeError deep inside the renderer, and a wrong-shaped
     # extensions/severity_map would fail per event instead of up front.
-    if not isinstance(data, dict):
-        raise ValueError(f"{path}: mapping must be a JSON object")
+    if not isinstance(data, Mapping):
+        raise ValueError(f"{where}: mapping must be a JSON object")
     for key in ("extensions", "severity_map"):
-        if key in data and not isinstance(data[key], dict):
-            raise ValueError(f"{path}: '{key}' must be a JSON object")
+        if key in data and not isinstance(data[key], Mapping):
+            raise ValueError(f"{where}: '{key}' must be an object")
+    for key in _MAPPING_HEADER_KEYS:
+        if key in data and not isinstance(data[key], str):
+            raise ValueError(f"{where}: '{key}' must be a string")
+    for key, template in data.get("extensions", {}).items():
+        if not isinstance(key, str) or not _EXTENSION_KEY_RE.fullmatch(key):
+            raise ValueError(f"{where}: invalid extension key {key!r}")
+        if not isinstance(template, str):
+            raise ValueError(
+                f"{where}: extension template for {key!r} must be a string"
+            )
+    for source, target in data.get("severity_map", {}).items():
+        source_text, target_text = str(source), str(target)
+        if not (
+            source_text.isascii() and source_text.isdigit()
+            and len(source_text) == 1
+            and 0 <= int(source_text) <= 7
+        ):
+            raise ValueError(
+                f"{where}: severity_map key {source!r} must be an integer from 0 to 7"
+            )
+        if not (
+            target_text.isascii() and target_text.isdigit()
+            and len(target_text) <= 2
+            and 0 <= int(target_text) <= 10
+        ):
+            raise ValueError(
+                f"{where}: severity_map value {target!r} must be an integer from 0 to 10"
+            )
     return data
 
 

@@ -38,10 +38,25 @@ class NormalizedEvent(ParsedEvent):
             "source_hint": self.source_hint,
             "msg": self.msg,
         }
-        base.update(self.sd)
-        base.update(self.kv)
-        base.update(self.extras)
-        return {k: v for k, v in base.items() if v is not None}
+        fields: Dict[str, Any] = {}
+        fields.update(self.sd)
+        fields.update(self.kv)
+        fields.update(self.extras)
+
+        # Parsed envelope metadata is more trustworthy than same-named
+        # key=value text inside the message. Reapply it last when present,
+        # while still allowing a kv field to fill metadata absent from the
+        # envelope. ``msg`` intentionally retains the established kv
+        # behavior for formats that carry an inner msg="..." value.
+        authoritative = {
+            "pri", "facility", "severity", "timestamp", "ts", "ts_orig",
+            "host", "app", "pid", "msgid", "source_hint",
+        }
+        for key in authoritative:
+            if base[key] is not None:
+                fields[key] = base[key]
+        fields.setdefault("msg", base["msg"])
+        return {k: v for k, v in fields.items() if v is not None}
 
 
 def normalize(event: ParsedEvent) -> NormalizedEvent:
@@ -98,7 +113,24 @@ def _derive_common_fields(event: NormalizedEvent) -> None:
     # including kv pairs extracted from adaptive-parsed lines — so
     # mappings and validation always see canonical CEF keys. Original
     # keys are kept; an existing canonical key is never overwritten.
-    from .dictionary import field_aliases
+    from .dictionary import cef_keys, field_aliases
+
+    # Source formats frequently vary only in field-name casing (SRCIP,
+    # SrcIp, srcip). Preserve every original key, add a lowercase spelling,
+    # and prefer an explicitly lowercase value when both forms are present.
+    original_items = list(event.kv.items())
+    for key, value in original_items:
+        lower = key.lower()
+        if lower not in event.kv:
+            event.kv[lower] = value
+
+    # Restore the dictionary's exact spelling for canonical camelCase CEF
+    # keys (DeviceExternalId -> deviceExternalId), again without overwrite.
+    canonical_by_lower = {key.lower(): key for key in cef_keys()}
+    for key, value in list(event.kv.items()):
+        canonical = canonical_by_lower.get(key.lower())
+        if canonical is not None and canonical not in event.kv:
+            event.kv[canonical] = value
 
     for alias, canonical in field_aliases().items():
         if canonical not in event.kv and alias in event.kv:

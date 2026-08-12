@@ -188,3 +188,66 @@ def test_adaptive_cached_empty_message_preserved():
     ev2 = parse_syslog("2021/05/02 11:00:00 fw-edge-02")
     assert ev2.host == "fw-edge-02"
     assert ev2.msg == ""
+
+
+def test_adaptive_hostless_line_does_not_poison_host_learning():
+    clear_cache()
+    first = parse_syslog("2021/05/01 10:00:00 ERROR link down")
+    assert first.host is None
+
+    # ERROR and an alphabetic hostname have the same reduced signature.
+    # A hostless cached pattern must not suppress the valid host later.
+    second = parse_syslog("2021/05/02 11:00:00 firewall session established")
+    assert second.source_hint == "adaptive"
+    assert second.host == "firewall"
+    assert second.msg == "session established"
+
+
+def test_adaptive_cached_host_strips_delimiter_consistently():
+    clear_cache()
+    first = parse_syslog("2021/05/01 10:00:00 fw-edge-01, session established")
+    second = parse_syslog("2021/05/02 11:00:00 fw-edge-02, session ended")
+
+    assert first.host == "fw-edge-01"
+    assert second.host == "fw-edge-02"
+
+
+def test_adaptive_preserves_original_timestamp_text():
+    clear_cache()
+    first = parse_syslog("2021/05/01 10:00:00 fw1 session established")
+    second = parse_syslog("2021/05/02 11:00:00 fw2 session ended")
+
+    assert first.ts_orig == "2021/05/01 10:00:00"
+    assert second.ts_orig == "2021/05/02 11:00:00"
+
+
+def test_adaptive_named_timezone_is_not_a_host():
+    clear_cache()
+    event = parse_syslog("2021/05/01 10:00:00 CEST firewall session established")
+
+    assert event.source_hint == "adaptive"
+    assert event.host is None
+    assert event.msg.startswith("CEST ")
+
+
+def test_adaptive_accepts_ipv6_host_tokens_on_fresh_and_cached_paths():
+    clear_cache()
+    first = parse_syslog("2021/05/01 10:00:00 2001:db8::1 session established")
+    second = parse_syslog("2021/05/02 11:00:00 2001:db8::2 session ended")
+
+    assert first.host == "2001:db8::1"
+    assert second.host == "2001:db8::2"
+
+
+def test_uppercase_kv_metadata_and_aliases_are_normalized():
+    line = (
+        "DATE=2020-04-23 TIME=12:32:48 DEVNAME=fw1 "
+        "LOGID=0100000001 LEVEL=warning SRCIP=10.1.1.1"
+    )
+    event = normalize_event(parse_syslog(line))
+
+    assert event.ts.year == 2020
+    assert event.host == "fw1"
+    assert event.severity == 4
+    assert event.kv["src"] == "10.1.1.1"
+    assert fields(convert_line(line))[1] == "Fortinet"

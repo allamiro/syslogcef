@@ -68,3 +68,14 @@ def test_parse_key_value_pairs():
     assert pairs["dst"] == "10.0.0.2"
     assert pairs["user"] == "bob"
     assert pairs["action"] == "allow"
+
+
+def test_parse_key_value_pairs_handles_escaped_quotes_and_commas():
+    pairs = parse_key_value_pairs(
+        r'reason="user said \"hello\"" src=10.0.0.1,dst=10.0.0.2 note=one,two'
+    )
+
+    assert pairs["reason"] == 'user said "hello"'
+    assert pairs["src"] == "10.0.0.1"
+    assert pairs["dst"] == "10.0.0.2"
+    assert pairs["note"] == "one,two"

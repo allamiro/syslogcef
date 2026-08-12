@@ -81,7 +81,13 @@ class MappingResolver:
         return header
 
     def _resolve_severity(self, fields: Mapping[str, Any]) -> str:
-        severity_map = {**DEFAULT_MAPPING["severity_map"], **self.mapping.get("severity_map", {})}
+        severity_map = DEFAULT_MAPPING["severity_map"].copy()
+        # Programmatic mappings may naturally use integer keys/values while
+        # JSON mappings always contain strings. Normalize both forms so a
+        # validated {6: 9} override behaves like {"6": "9"}.
+        severity_map.update(
+            {str(key): str(value) for key, value in self.mapping.get("severity_map", {}).items()}
+        )
         value = fields.get("severity")
         if value is None and "pri" in fields:
             # "pri" may come from an untrusted kv pair (pri=zzz), not just

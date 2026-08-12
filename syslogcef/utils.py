@@ -25,7 +25,11 @@ MONTHS = {
     "Dec": 12,
 }
 
-KEY_VALUE_RE = re.compile(r"(?P<key>[A-Za-z0-9_.-]+)=(?P<value>\"[^\"]*\"|'[^']*'|\S+)")
+KEY_VALUE_RE = re.compile(
+    r"(?P<key>[A-Za-z0-9_.-]+)="
+    r"(?P<value>\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|"
+    r"\S+?(?=,\s*[A-Za-z0-9_.-]+=|\s|$))"
+)
 
 SEVERITY_WORDS = {
     "emergency": 0, "emerg": 0, "panic": 0,
@@ -118,7 +122,12 @@ def parse_key_value_pairs(msg: str) -> Dict[str, str]:
         key = match.group("key")
         value = match.group("value")
         if len(value) >= 2 and value[0] in "\"'" and value[-1] == value[0]:
+            quote = value[0]
             value = value[1:-1]
+            # Decode only escapes meaningful to the surrounding quote.
+            # Sequences such as \n and Windows path separators remain
+            # literal instead of being unexpectedly transformed.
+            value = re.sub(rf"\\([{re.escape(quote)}\\])", r"\1", value)
         pairs[key] = value
     return pairs
 

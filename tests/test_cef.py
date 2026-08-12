@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from syslogcef.api import convert_line, normalize_event, parse_syslog, to_cef
 from syslogcef.mappings import CISCO_ASA, load_mapping
 
@@ -18,6 +20,11 @@ def test_custom_severity_map_overrides_default():
     mapping = dict(CISCO_ASA)
     mapping["severity_map"] = {"6": "9"}
     cef = convert_line(ASA_LINE, mapping=mapping)
+    assert cef.split("|")[6] == "9"
+
+
+def test_programmatic_severity_map_accepts_integer_keys_and_values():
+    cef = convert_line(ASA_LINE, mapping={"severity_map": {6: 9}})
     assert cef.split("|")[6] == "9"
 
 
@@ -62,3 +69,23 @@ def test_load_mapping_by_name():
         pass
     else:
         raise AssertionError("expected KeyError for unknown mapping name")
+
+
+@pytest.mark.parametrize(
+    "mapping, message",
+    [
+        ({"extensions": ["src"]}, "'extensions' must be an object"),
+        ({"severity_map": None}, "'severity_map' must be an object"),
+        ({"extensions": {"src": 123}}, "extension template for 'src' must be a string"),
+        ({"deviceVendor": 123}, "'deviceVendor' must be a string"),
+        ({"severity_map": {"6": "urgent"}}, "severity_map value"),
+    ],
+)
+def test_programmatic_mapping_is_validated(mapping, message):
+    with pytest.raises(ValueError, match=message):
+        convert_line("plain log", mapping=mapping)
+
+
+def test_mapping_rejects_extension_keys_that_break_cef_structure():
+    with pytest.raises(ValueError, match="invalid extension key"):
+        convert_line("plain log", mapping={"extensions": {"bad key": "value"}})

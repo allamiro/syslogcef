@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Adaptive parsing no longer lets a cached hostless layout suppress hosts on
+  later lines with the same reduced signature. Cached hosts now normalize
+  trailing delimiters consistently, named timezone remnants are not treated
+  as hosts, IP host tokens are accepted, and `ts_orig` is retained.
+- Normalization now treats parsed syslog envelope metadata as authoritative
+  over same-named message key/value pairs, preventing payload fields such as
+  `host=` and `severity=` from changing mapped metadata. Field-name matching
+  is case-insensitive while original spellings remain available.
+- Key/value extraction supports escaped quotes and comma-delimited pairs
+  without splitting ordinary comma-containing values.
+- Python mapping dictionaries receive the same eager structural validation as
+  JSON mapping files. Invalid header/extension templates, severity maps, and
+  extension keys now fail clearly instead of raising during rendering or
+  producing structurally invalid CEF.
+
 ## [0.3.2] - 2026-08-12
 
 ### Fixed
