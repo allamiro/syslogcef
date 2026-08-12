@@ -131,3 +131,30 @@ def test_valid_templates_are_accepted(mapping):
 def test_literal_percent_template_renders():
     cef = convert_line("plain log", mapping={"name": "100%% clean"})
     assert cef.split("|")[5] == "100% clean"
+
+
+@pytest.mark.parametrize("template", ["%(msg).s", "%(msg).3s", "%(msg)-10.2s"])
+def test_precision_templates_are_accepted(template):
+    # A bare "." precision is legal Python (precision zero); rejecting it
+    # would fail valid user mappings before rendering.
+    assert convert_line("plain log", mapping={"name": template}).startswith("CEF:0|")
+
+
+def test_mapping_is_validated_once_for_a_stream():
+    from syslogcef.api import StreamConverter, _load_mapping, _ValidatedMapping
+
+    validated = _load_mapping({"deviceVendor": "Acme"})
+    assert isinstance(validated, _ValidatedMapping)
+    # Re-loading an already-validated mapping short-circuits, so a long
+    # stream does not re-validate templates for every record.
+    assert _load_mapping(validated) is validated
+
+    converter = StreamConverter(mapping={"deviceVendor": "Acme"})
+    assert isinstance(converter.mapping, _ValidatedMapping)
+
+
+def test_stream_converter_rejects_a_malformed_mapping_at_construction():
+    from syslogcef.api import StreamConverter
+
+    with pytest.raises(ValueError, match="invalid format specifier"):
+        StreamConverter(mapping={"deviceVendor": "%q"})

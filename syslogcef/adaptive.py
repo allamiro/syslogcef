@@ -75,8 +75,13 @@ _SKIP_HOST_TOKENS = {
     "panic", "warn", "warning",
     # Common named timezone remnants. The timestamp shapes deliberately do
     # not pretend to resolve named zones, but these must not become hosts.
+    # Abbreviations that double as ordinary English words (WEST, CAT, EAT,
+    # ART) are deliberately excluded: rejecting them would drop genuine
+    # short hostnames, which is the worse failure of the two.
     "utc", "gmt", "cet", "cest", "eet", "eest", "est", "edt", "cst",
-    "cdt", "mst", "mdt", "pst", "pdt",
+    "cdt", "mst", "mdt", "pst", "pdt", "bst", "ist", "idt", "jst",
+    "kst", "aest", "aedt", "acst", "acdt", "awst", "nzst", "nzdt",
+    "msk", "hst", "akst", "akdt", "sast", "brt", "clt",
 }
 
 # Syslog-style program tag following the host: "app:", "app[pid]:".
@@ -96,16 +101,14 @@ def _valid_host(candidate: Optional[str]) -> bool:
 
 
 def _normalize_host_token(token: str) -> str:
-    """Remove an optional layout delimiter from a host token.
+    """Strip trailing layout delimiters from a host token.
 
-    A comma or a single trailing colon separates a hostname from the next
-    field. Multiple colons belong to an IPv6 literal and must be retained.
+    Only trailing characters are removed, so an IPv6 literal keeps its
+    internal colons ("2001:db8::1" is untouched). Stripping the whole run
+    rather than one character keeps multi-character delimiters such as
+    "host::" and "host:," working, as the original analysis path did.
     """
-    if token.endswith(","):
-        return token[:-1]
-    if token.endswith(":") and token.count(":") == 1:
-        return token[:-1]
-    return token
+    return token.rstrip(":,")
 
 
 _CACHE: Dict[str, Tuple[Pattern[str], str, Callable]] = {}

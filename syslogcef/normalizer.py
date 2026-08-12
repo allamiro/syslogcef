@@ -53,7 +53,11 @@ class NormalizedEvent(ParsedEvent):
             "host", "app", "pid", "msgid", "source_hint",
         }
         for key in authoritative:
-            if base[key] is not None:
+            # An absent original timestamp is represented as "" rather than
+            # None, so emptiness must count as absent too: otherwise a
+            # record with no recognized envelope timestamp would reapply ""
+            # over a payload ts_orig= value and hide it from mappings.
+            if base[key] is not None and base[key] != "":
                 fields[key] = base[key]
         fields.setdefault("msg", base["msg"])
         return {k: v for k, v in fields.items() if v is not None}

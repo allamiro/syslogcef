@@ -124,6 +124,15 @@ def _looks_like_kv_line(body: str) -> bool:
     if len(matches) < 3:
         return False
     covered = sum(m.end() - m.start() for m in matches)
+    # A delimiter between two adjacent pairs is part of the kv structure,
+    # not unmatched prose. KEY_VALUE_RE deliberately excludes the trailing
+    # separator from a value, so without this a comma-delimited stream of
+    # short values ("a=1, b=2, c=3, d=4") scores below the threshold purely
+    # because of its separators and is no longer recognized as kv.
+    for current, following in zip(matches, matches[1:]):
+        gap = body[current.end():following.start()]
+        if gap and not gap.strip(", \t"):
+            covered += len(gap)
     return covered >= 0.7 * len(body.strip())
 
 

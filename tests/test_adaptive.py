@@ -3,6 +3,8 @@ from __future__ import annotations
 """Tests for the new format parsers and the adaptive pattern detector."""
 
 
+import pytest
+
 from syslogcef import convert_line, normalize_event, parse_syslog
 from syslogcef.adaptive import cache_size, clear_cache
 
@@ -251,3 +253,29 @@ def test_uppercase_kv_metadata_and_aliases_are_normalized():
     assert event.severity == 4
     assert event.kv["src"] == "10.1.1.1"
     assert fields(convert_line(line))[1] == "Fortinet"
+
+
+def test_adaptive_multi_character_host_delimiter():
+    # The analysis path always stripped the whole trailing ":,"" run; the
+    # cached path must not regress to removing only one character.
+    for line, expected in (
+        ("2021/05/01 10:00:00 fw-edge-01:: session up", "fw-edge-01"),
+        ("2021/05/01 10:00:00 fw-edge-02:, session up", "fw-edge-02"),
+    ):
+        clear_cache()
+        assert parse_syslog(line).host == expected
+
+
+@pytest.mark.parametrize("zone", ["BST", "JST", "AEST", "MSK", "NZDT", "SAST"])
+def test_adaptive_additional_named_timezones_are_not_hosts(zone):
+    clear_cache()
+    event = parse_syslog(f"2021/05/01 10:00:00 {zone} fw1 session up")
+    assert event.host is None
+
+
+@pytest.mark.parametrize("token", ["west", "cat", "art", "eat"])
+def test_adaptive_english_word_hostnames_are_still_accepted(token):
+    # Timezone abbreviations that double as ordinary words must not be
+    # skipped, or genuine short hostnames would be dropped.
+    clear_cache()
+    assert parse_syslog(f"2021/05/01 10:00:00 {token} session up").host == token

@@ -35,6 +35,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Case normalization of canonical CEF keys no longer depends on the order
   fields appear in a message: an explicitly lowercase `deviceexternalid=`
   now wins over `DEVICEEXTERNALID=` in either order.
+- A record with no recognized envelope timestamp no longer hides a payload
+  `ts_orig=` value: an empty envelope timestamp counts as absent rather
+  than overwriting the message field.
+- Comma-delimited key/value streams of short values (`a=1, b=2, c=3`) are
+  still detected as key/value records now that separators are excluded from
+  matched values.
+- More named timezone abbreviations (BST, IST, JST, KST, AEST, MSK, NZDT,
+  SAST and similar) are rejected as adaptive hostnames. Abbreviations that
+  double as ordinary words (WEST, CAT, EAT, ART) are deliberately still
+  accepted, since dropping a genuine short hostname is the worse failure.
+- A hostname followed by a multi-character delimiter (`host::`, `host:,`)
+  is recognized again on both the analysis and cached adaptive paths.
+- Mapping validation runs once per stream instead of once per record, so a
+  malformed mapping is reported when `StreamConverter` is constructed and
+  long runs do not re-validate templates for every event.
 
 ### Changed
 

@@ -12,13 +12,10 @@ from .parsers import ParsedEvent, ParserError, autodetect_and_parse
 from .normalizer import NormalizedEvent, normalize
 from .utils import sanitize_message
 from .mappings import CISCO_ASA, CISCO_IOS, F5, FORTINET, LINUX, SOPHOS, VMWARE
-from .cef import CEFEvent, build_cef
+from .cef import HEADER_KEYS, CEFEvent, build_cef
 
 logger = logging.getLogger(__name__)
 
-_MAPPING_HEADER_KEYS = (
-    "deviceVendor", "deviceProduct", "deviceVersion", "eventClassId", "name"
-)
 _EXTENSION_KEY_RE = re.compile(r"^[A-Za-z0-9_.]+$")
 
 # One printf-style conversion as templates are rendered (``template % fields``):
@@ -26,7 +23,8 @@ _EXTENSION_KEY_RE = re.compile(r"^[A-Za-z0-9_.]+$")
 # precision and length modifier. A width/precision of "*" is deliberately
 # excluded because it consumes positional arguments a mapping cannot supply.
 _FORMAT_SPEC_RE = re.compile(
-    r"%(?:%|\((?P<key>[^)]*)\)[#0\- +]*\d*(?:\.\d+)?[hlL]?[diouxXeEfFgGcrsa])"
+    # A bare "." precision is legal Python (it means zero), so \d* not \d+.
+    r"%(?:%|\((?P<key>[^)]*)\)[#0\- +]*\d*(?:\.\d*)?[hlL]?[diouxXeEfFgGcrsa])"
 )
 
 
@@ -101,9 +99,21 @@ def normalize_event(event: ParsedEvent | NormalizedEvent) -> NormalizedEvent:
     return normalize(event)
 
 
+class _ValidatedMapping(dict):
+    """A mapping that has already passed structural validation.
+
+    ``to_cef`` loads its mapping per event, so a long stream would otherwise
+    re-run template and severity-map validation for every record. Callers
+    that convert many events (``StreamConverter``, the CLI) validate once and
+    pass the result back in; this marker lets the second load short-circuit.
+    """
+
+
 def _load_mapping(mapping: Mapping[str, Any] | Path | str | None) -> Mapping[str, Any]:
     if mapping is None:
         return {}
+    if isinstance(mapping, _ValidatedMapping):
+        return mapping
     if isinstance(mapping, Mapping):
         data = mapping
         where = "mapping"
@@ -120,7 +130,7 @@ def _load_mapping(mapping: Mapping[str, Any] | Path | str | None) -> Mapping[str
     for key in ("extensions", "severity_map"):
         if key in data and not isinstance(data[key], Mapping):
             raise ValueError(f"{where}: '{key}' must be an object")
-    for key in _MAPPING_HEADER_KEYS:
+    for key in HEADER_KEYS:
         if key in data:
             if not isinstance(data[key], str):
                 raise ValueError(f"{where}: '{key}' must be a string")
@@ -151,7 +161,7 @@ def _load_mapping(mapping: Mapping[str, Any] | Path | str | None) -> Mapping[str
             raise ValueError(
                 f"{where}: severity_map value {target!r} must be an integer from 0 to 10"
             )
-    return data
+    return _ValidatedMapping(data)
 
 
 def to_cef(
@@ -222,7 +232,9 @@ class StreamConverter:
         strict: bool = False,
     ) -> None:
         self.mode = mode
-        self.mapping = mapping
+        # Validate the mapping once here rather than per converted line, and
+        # surface a malformed mapping before any record is emitted.
+        self.mapping = None if mapping is None else _load_mapping(mapping)
         self.validate = validate
         self.strict = strict
         self._contexts: dict[str, ParsedEvent] = {}

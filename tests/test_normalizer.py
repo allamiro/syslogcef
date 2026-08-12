@@ -107,3 +107,17 @@ def test_canonical_casing_does_not_depend_on_message_order():
         )
         assert event.kv["deviceExternalId"] == "new"
         assert event.kv["DEVICEEXTERNALID"] == "old"
+
+
+def test_empty_envelope_ts_orig_does_not_mask_payload_value():
+    # A record with no recognized envelope timestamp carries ts_orig="",
+    # which must count as absent rather than overwriting a payload value.
+    event = normalize_event(parse_syslog("ts_orig=device-clock foo=1 bar=2 baz=3"))
+    assert event.as_field_dict()["ts_orig"] == "device-clock"
+
+
+def test_parsed_ts_orig_still_wins_over_payload():
+    event = normalize_event(
+        parse_syslog("<166>Jan  1 12:34:56 h app: ts_orig=spoof a=1", now=NOW)
+    )
+    assert event.as_field_dict()["ts_orig"] == "Jan 1 12:34:56"
