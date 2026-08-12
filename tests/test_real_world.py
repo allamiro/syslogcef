@@ -75,6 +75,25 @@ def test_pri_survives_sophos_kv_line():
     assert fields(cef)[6] == "2"
 
 
+def test_rfc3164_with_kv_message_body_is_not_claimed_by_kv():
+    # An ordinary RFC3164/journald-short line whose message carries many
+    # key=value pairs (containerd, dockerd, ...) must be parsed by its
+    # syslog parser — host/app extracted, header stripped — not misread
+    # as the kv format (regression for the detector ordering, #102).
+    line = (
+        "Aug 10 13:44:31 clay-wks-linux-15 containerd[3749511]: "
+        'time="2026-08-10T13:44:31.216507070Z" level=info '
+        'msg="connecting to shim f6f0" address="unix:///run/x" '
+        "namespace=moby protocol=ttrpc version=3"
+    )
+    ev = parse_syslog(line)
+    assert ev.source_hint in {"rfc3164", "journald"}
+    assert ev.host == "clay-wks-linux-15"
+    assert ev.app == "containerd"
+    assert ev.pid == "3749511"
+    assert ev.msg.startswith("time=")
+
+
 def test_pri_survives_raw_fallback():
     line = "<30>completely nonstandard payload without structure"
     ev = parse_syslog(line)

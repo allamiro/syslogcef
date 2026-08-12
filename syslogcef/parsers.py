@@ -728,10 +728,16 @@ def autodetect_and_parse(line: str, *, mode: Optional[str] = None, now: Optional
         ("rsyslog_file", lambda s: bool(RSYSLOG_FILE_RE.match(s))),
         ("journald_iso", lambda s: bool(JOURNALCTL_ISO_RE.match(s))),
         ("iso_syslog", lambda s: bool(ISO_SYSLOG_RE.match(s))),
-        ("kv", lambda s: "=" in s[:80]),
+        # Header-based parsers run BEFORE kv: a normal RFC3164/journald
+        # line whose *message* carries key=value pairs (containerd,
+        # dockerd, NetworkManager, ...) must be claimed by its syslog
+        # parser, not the kv format. Genuine kv streams (Fortinet, Sophos)
+        # start with date=/device= and match none of these headers, so
+        # they still fall through to kv.
         ("cisco_seq", lambda s: bool(CISCO_SEQ_RE.match(s))),
         ("journald_short", lambda s: bool(JOURNALCTL_SHORT_RE.match(s))),
         ("rfc3164", lambda s: bool(RFC3164_RE.match(s))),
+        ("kv", lambda s: "=" in s[:80]),
     ]
 
     from . import custom
