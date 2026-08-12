@@ -103,11 +103,14 @@ def _valid_host(candidate: Optional[str]) -> bool:
 def _normalize_host_token(token: str) -> str:
     """Strip trailing layout delimiters from a host token.
 
-    Only trailing characters are removed, so an IPv6 literal keeps its
-    internal colons ("2001:db8::1" is untouched). Stripping the whole run
-    rather than one character keeps multi-character delimiters such as
-    "host::" and "host:," working, as the original analysis path did.
+    A token that is already a valid address is returned untouched: a
+    compressed IPv6 literal may legitimately end in "::" ("2001:db8::",
+    "fe80::"), and stripping that would silently corrupt the host. Anything
+    else has its whole trailing ":," run removed, so multi-character layout
+    delimiters ("host::", "host:,") work as the analysis path always did.
     """
+    if is_ip(token):
+        return token
     return token.rstrip(":,")
 
 

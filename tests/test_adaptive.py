@@ -279,3 +279,12 @@ def test_adaptive_english_word_hostnames_are_still_accepted(token):
     # skipped, or genuine short hostnames would be dropped.
     clear_cache()
     assert parse_syslog(f"2021/05/01 10:00:00 {token} session up").host == token
+
+
+@pytest.mark.parametrize("host", ["2001:db8::", "fe80::", "2001:db8::1"])
+def test_adaptive_compressed_ipv6_host_is_not_truncated(host):
+    # A compressed IPv6 literal may legitimately end in "::"; stripping
+    # trailing delimiters must not corrupt it, on either code path.
+    clear_cache()
+    assert parse_syslog(f"2021/05/01 10:00:00 {host} session up").host == host
+    assert parse_syslog(f"2021/05/02 11:00:00 {host} session down").host == host
