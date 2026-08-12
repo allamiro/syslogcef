@@ -33,6 +33,12 @@ gzip -9n "$STAGE/usr/share/man/man1/syslogcef.1"
 
 INSTALLED_SIZE=$(du -sk "$STAGE" | cut -f1)
 
+# Renamed from syslogcef in 0.3.4. Replaces/Conflicts let this package take
+# over an installed syslogcef when the .deb is installed directly, which is
+# how it ships (GitHub release asset). Debian has no Obsoletes equivalent, so
+# a repository-driven "apt upgrade" migration would need a transitional
+# syslogcef package depending on syslog2cef; there is no apt repository for
+# this project, so none is built.
 cat > "$STAGE/DEBIAN/control" <<EOF
 Package: syslog2cef
 Version: ${VERSION}-1
@@ -42,7 +48,7 @@ Architecture: all
 Depends: python3 (>= 3.9)
 Installed-Size: ${INSTALLED_SIZE}
 Maintainer: Tamir Suliman <allamiro@gmail.com>
-Provides: syslogcef
+Provides: syslogcef (= ${VERSION}-1)
 Replaces: syslogcef
 Conflicts: syslogcef
 Homepage: https://github.com/allamiro/syslog2cef

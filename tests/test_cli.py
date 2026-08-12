@@ -201,3 +201,34 @@ def test_man_page_source_field_names_the_project():
     ).read_text().splitlines()[0]
     assert first.startswith(".TH SYSLOGCEF 1 ")
     assert '"syslog2cef ' in first
+
+
+def test_external_resource_names_are_not_renamed():
+    """Names owned by external services keep their original spelling.
+
+    The GitHub repository rename does not rename the COPR project or the
+    signing keys, and a blanket search-and-replace across the docs silently
+    turns those into dead references.
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    readme = root.joinpath("README.md").read_text()
+    assert "copr.fedorainfracloud.org/coprs/allamiro/syslogcef/" in readme
+    assert "dnf copr enable allamiro/syslogcef" in readme
+    # No COPR reference may point at the non-existent renamed project.
+    assert "coprs/allamiro/syslog2cef" not in readme
+    assert "copr enable allamiro/syslog2cef" not in readme
+    assert root.joinpath("packaging/rpm/RPM-GPG-KEY-syslogcef").exists()
+    assert root.joinpath("packaging/apk/syslogcef.rsa.pub").exists()
+
+
+def test_changelog_history_is_not_rewritten():
+    # Entries predating 0.3.4 must keep the names that were true then.
+    from pathlib import Path
+
+    text = Path(__file__).resolve().parent.parent.joinpath("CHANGELOG.md").read_text()
+    history = text.split("## [0.3.3]", 1)[1]
+    assert "ghcr.io/allamiro/syslogcef" in history
+    assert "`allamiro/syslogcef`" in history
+    assert "ghcr.io/allamiro/syslog2cef" not in history

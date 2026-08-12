@@ -19,9 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unchanged, deliberately:** the `syslogcef` command, the importable
   `syslogcef` Python package, the config paths (`/etc/syslogcef/`), the
   systemd unit names, the log directory and the `syslogcef` system user. An
-  existing install therefore upgrades in place — the RPM carries
-  `Provides`/`Obsoletes`, the Alpine package `provides`/`replaces`, and the
-  Debian package `Provides`/`Replaces`/`Conflicts` for the old name.
+  existing install therefore keeps working across the rename. The RPM
+  carries `Provides`/`Obsoletes`, so `dnf upgrade` from the COPR repository
+  migrates automatically. The Alpine package carries `provides`/`replaces`
+  and the Debian package a versioned `Provides` plus `Replaces`/`Conflicts`,
+  which let each take over an installed `syslogcef` when the artifact is
+  installed directly — the way both are distributed. Debian has no
+  `Obsoletes` equivalent, so there is no repository-driven `apt upgrade`
+  migration; there is also no apt repository for this project.
+- The COPR project keeps its existing name, `allamiro/syslogcef`, because
+  renaming it would break every user who has already enabled it. The
+  packages it builds are named `syslog2cef` from this release on.
 - The signing keys keep their filenames and UID (`RPM-GPG-KEY-syslogcef`,
   `packaging/apk/syslogcef.rsa.pub`, "syslogcef release signing"): renaming
   them would invalidate verification for anyone who already imported them.
@@ -336,8 +344,8 @@ Validated against all 543 filebeat module test logs from elastic/beats
 - `syslogcef(1)` man page, installed by the RPM, Debian, and Alpine
   packages.
 - Multi-arch (amd64/arm64) container image published to
-  `ghcr.io/allamiro/syslog2cef` on each release.
-- COPR repository (`allamiro/syslog2cef`) building for Fedora, EPEL 9/10,
+  `ghcr.io/allamiro/syslogcef` on each release.
+- COPR repository (`allamiro/syslogcef`) building for Fedora, EPEL 9/10,
   and CentOS Stream 9/10 on x86_64 and aarch64, rebuilt automatically on
   every push.
 

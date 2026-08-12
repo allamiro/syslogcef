@@ -71,13 +71,17 @@ docker run -i ghcr.io/allamiro/syslog2cef < /var/log/syslog
 ```
 
 Fedora, RHEL/Alma/Rocky 9 and 10, and CentOS Stream users can install
-from the [COPR repository](https://copr.fedorainfracloud.org/coprs/allamiro/syslog2cef/),
+from the [COPR repository](https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/),
 which rebuilds automatically from every commit:
 
 ```bash
-sudo dnf copr enable allamiro/syslog2cef
+sudo dnf copr enable allamiro/syslogcef
 sudo dnf install syslog2cef
 ```
+
+The COPR project keeps its original name (`allamiro/syslogcef`) so that
+already-enabled repositories keep working; the package it builds is
+`syslog2cef`.
 
 Every asset ships with a detached GPG signature (`.asc`) and is listed in
 a signed `SHA256SUMS` file; RPMs additionally carry embedded `rpmsign`
