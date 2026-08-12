@@ -28,6 +28,14 @@ DEFAULT_MAPPING = {
     },
     "extensions": {
         "msg": "%(msg)s",
+        # The syslog HOSTNAME identifies the device that GENERATED the
+        # event, so it is the source host (shost) and the reporting device
+        # (dvchost) — never the destination (dhost), which is reserved for
+        # network-specific logs whose payload names an actual destination.
+        # Extensions resolving to an empty value are dropped, so this is a
+        # no-op when a line has no host.
+        "shost": "%(host)s",
+        "dvchost": "%(host)s",
         # Event time (epoch milliseconds) parsed from the line, or the
         # processing time when the line carried no usable timestamp.
         "rt": "%(rt)s",

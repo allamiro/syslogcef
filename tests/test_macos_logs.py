@@ -101,9 +101,9 @@ class TestContinuationLines:
         )
         cont = conv.convert('\t    "dsAttrTypeStandard:OperatingSystemVersion"')
         closing = conv.convert("\t)")
-        assert "dhost=MacBookPro" in first
+        assert "shost=MacBookPro" in first
         for cef in (cont, closing):
-            assert "dhost=MacBookPro" in cef
+            assert "shost=MacBookPro" in cef
             assert "sproc=opendirectoryd" in cef
             assert "dvcpid=69" in cef
         # Continuation lines carry the parent's event time.
@@ -123,7 +123,7 @@ class TestContinuationLines:
         cont = conv.convert("\tindented continuation")
         # Context still comes from the last *parsed* event, not the
         # freeform fallback line.
-        assert "dhost=MacBookPro" in cont
+        assert "shost=MacBookPro" in cont
 
     def test_indented_message_preserved(self):
         conv = StreamConverter()
@@ -149,7 +149,7 @@ class TestPerSourceContext:
         conv = StreamConverter()
         conv.convert("May 28 16:04:52 MacBookPro opendirectoryd[69]: parent", source="a.log")
         cef = conv.convert("\tindented start of another file", source="b.log")
-        assert "dhost=MacBookPro" not in cef
+        assert "shost=MacBookPro" not in cef
 
     def test_each_source_keeps_its_own_context(self):
         conv = StreamConverter()
@@ -158,8 +158,8 @@ class TestPerSourceContext:
         # Interleaved continuations inherit from their own file.
         cef_a = conv.convert("\tcontinuation for A", source="a.log")
         cef_b = conv.convert("\tcontinuation for B", source="b.log")
-        assert "dhost=host-a" in cef_a and "sproc=appa" in cef_a
-        assert "dhost=host-b" in cef_b and "sproc=appb" in cef_b
+        assert "shost=host-a" in cef_a and "sproc=appa" in cef_a
+        assert "shost=host-b" in cef_b and "sproc=appb" in cef_b
 
     def test_process_lines_tags_sources(self):
         from syslogcef.cli import process_lines
@@ -171,8 +171,8 @@ class TestPerSourceContext:
         out = list(
             process_lines(items, mode=None, mapping=None, use_multiprocessing=False, pool_size=None)
         )
-        assert "dhost=host-a" in out[0]
-        assert "dhost=host-a" not in out[1]
+        assert "shost=host-a" in out[0]
+        assert "shost=host-a" not in out[1]
 
 
 class TestForcedModeContinuation:
@@ -182,8 +182,8 @@ class TestForcedModeContinuation:
         conv = StreamConverter(mode="journald_short")
         parent = conv.convert("May 28 16:04:52 MacBookPro opendirectoryd[69]: parent event")
         cont = conv.convert("\t    wrapped payload line")
-        assert "dhost=MacBookPro" in parent
-        assert "dhost=MacBookPro" in cont
+        assert "shost=MacBookPro" in parent
+        assert "shost=MacBookPro" in cont
         assert "sproc=opendirectoryd" in cont
 
     def test_forced_mode_still_rejects_non_continuations(self):
@@ -232,3 +232,27 @@ class TestDvcpidNumericOnly:
             strict=True,
         )
         assert cef.startswith("CEF:0|")
+
+
+class TestSyslogHostIsSource:
+    """The syslog HOSTNAME is the device that generated the event, so it
+    maps to shost/dvchost (source/device), never dhost (destination)."""
+
+    def test_linux_mapping_host_is_shost_not_dhost(self):
+        from syslogcef import convert_line
+
+        cef = convert_line(
+            "<13>Aug 10 13:39:25 clay-wks-linux-15 kernel: docker0: port 1 entered blocking state"
+        )
+        assert "shost=clay-wks-linux-15" in cef
+        assert "dvchost=clay-wks-linux-15" in cef
+        assert "dhost=" not in cef
+
+    def test_default_mapping_surfaces_host_as_source(self):
+        # An unknown-vendor line (no bundled mapping) still surfaces the
+        # host as shost via the default mapping.
+        from syslogcef import convert_line
+
+        cef = convert_line("<13>Aug 10 13:39:25 gw-01 weirdproc: unrecognized payload zzz")
+        assert "shost=gw-01" in cef
+        assert "dhost=" not in cef
