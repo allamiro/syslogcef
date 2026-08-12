@@ -1,13 +1,13 @@
 # Contributing
 
-Thanks for your interest in syslogcef. Bug reports, feature requests, and
+Thanks for your interest in syslog2cef. Bug reports, feature requests, and
 pull requests are welcome.
 
 ## Development Setup
 
 ```bash
-git clone https://github.com/allamiro/syslogcef.git
-cd syslogcef
+git clone https://github.com/allamiro/syslog2cef.git
+cd syslog2cef
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .[test]

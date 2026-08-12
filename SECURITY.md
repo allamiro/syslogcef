@@ -14,7 +14,7 @@ Please do not report security vulnerabilities through public GitHub issues.
 
 Preferred: use GitHub private vulnerability reporting — go to the repository's
 Security tab and choose "Report a vulnerability". Alternatively, email the
-maintainer at allamiro@gmail.com with the subject line "syslogcef security".
+maintainer at allamiro@gmail.com with the subject line "syslog2cef security".
 
 Include as much of the following as you can:
 
@@ -30,7 +30,7 @@ public disclosure.
 
 ## Threat Model
 
-syslogcef treats **all log content as untrusted input**, whether it arrives
+syslog2cef treats **all log content as untrusted input**, whether it arrives
 from a file, standard input, or the network.
 
 ### CEF output integrity
@@ -51,7 +51,7 @@ scope and very welcome.
 
 - **Files / stdin** (default): the converter reads local logs and opens no
   network sockets.
-- **`--listen udp:PORT` / `tcp:PORT`** turns syslogcef into a network
+- **`--listen udp:PORT` / `tcp:PORT`** turns syslog2cef into a network
   receiver. Received bytes are **unauthenticated and attacker-controllable**.
   There is no TLS and no source authentication; deploy behind a firewall or
   on a trusted management network and restrict who can reach the port. The TCP
@@ -61,7 +61,7 @@ scope and very welcome.
 - **Custom parser patterns** (`--patterns`) are regular expressions supplied
   by the operator and run against untrusted log lines. Author them anchored
   and free of nested quantifiers to avoid catastrophic backtracking (ReDoS);
-  syslogcef validates pattern files at load but does not analyze regex
+  syslog2cef validates pattern files at load but does not analyze regex
   complexity.
 
 ### Output / forwarding surfaces

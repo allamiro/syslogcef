@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="880" height="300" viewBox="0 0 880 300" role="img" aria-label="syslogcef demo: converting syslog to CEF in different ways" font-family="Menlo, Consolas, 'DejaVu Sans Mono', monospace">
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="300" viewBox="0 0 880 300" role="img" aria-label="syslog2cef demo: converting syslog to CEF in different ways" font-family="Menlo, Consolas, 'DejaVu Sans Mono', monospace">
   <defs>
     <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#38bdf8"/>
@@ -13,7 +13,7 @@
   <circle cx="28" cy="21" r="6.5" fill="#f87171"/>
   <circle cx="50" cy="21" r="6.5" fill="#fbbf24"/>
   <circle cx="72" cy="21" r="6.5" fill="#34d399"/>
-  <text x="440" y="26" font-size="14" fill="#94a3b8" text-anchor="middle">syslogcef — demo</text>
+  <text x="440" y="26" font-size="14" fill="#94a3b8" text-anchor="middle">syslog2cef — demo</text>
 
   <!-- ============ scene 1: pipe a Cisco ASA line ============ -->
   <g opacity="0">

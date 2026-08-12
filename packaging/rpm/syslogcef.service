@@ -1,6 +1,6 @@
 [Unit]
 Description=syslogcef syslog to CEF converter
-Documentation=https://github.com/allamiro/syslogcef
+Documentation=https://github.com/allamiro/syslog2cef
 After=network.target
 
 [Service]

@@ -56,10 +56,10 @@ jobs:
         with:
           dockerfile: Dockerfile
       - name: Build image
-        run: docker build -t syslogcef:ci .
+        run: docker build -t syslog2cef:ci .
       - name: Smoke test image
         run: |
-          out=$(echo '<166>Jan  1 12:34:56 router1 %ASA-6-302013: Built inbound TCP connection' | docker run --rm -i syslogcef:ci)
+          out=$(echo '<166>Jan  1 12:34:56 router1 %ASA-6-302013: Built inbound TCP connection' | docker run --rm -i syslog2cef:ci)
           echo "$out"
           case "$out" in
             CEF:0*) ;;

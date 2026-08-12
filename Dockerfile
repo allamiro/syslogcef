@@ -1,8 +1,8 @@
 FROM python:3.13-alpine
 
-LABEL org.opencontainers.image.title="syslogcef" \
+LABEL org.opencontainers.image.title="syslog2cef" \
       org.opencontainers.image.description="Convert syslog events to ArcSight CEF" \
-      org.opencontainers.image.source="https://github.com/allamiro/syslogcef" \
+      org.opencontainers.image.source="https://github.com/allamiro/syslog2cef" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.authors="Tamir Suliman <allamiro@gmail.com>"
 
