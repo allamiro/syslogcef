@@ -8,14 +8,14 @@ consumers. They are derived from the ArcSight Extension Dictionary.
 - **Producers vs. consumers**: the keys in the Event Consumers table are
   set by the receiving side (ArcSight connectors) and *must not be set by
   event producers*. Producers wanting to carry such data use the custom
-  fields with a label (e.g. `cs1` + `cs1Label`), as syslogcef's bundled
+  fields with a label (e.g. `cs1` + `cs1Label`), as syslog2cef's bundled
   mappings do for the raw event text.
 - **Version differences**: in CEF 0.1, `in`/`out` (bytesIn/bytesOut) are
   Integer and all IP address fields are IPv4-only; from CEF 1.0 onward
   they accept Long values and IPv6 addresses respectively. Note the
   `CEF:0` wire prefix does not by itself select a dictionary version —
   integrations on the 1.x dictionary still emit `CEF:0` headers.
-  syslogcef *chooses* to validate against the conservative rules for
+  syslog2cef *chooses* to validate against the conservative rules for
   broadest consumer compatibility: `--validate`/`--strict` enforce the
   0.x IP rule (IPv6 belongs in `c6a1`–`c6a4`) while accepting Long for
   `in`/`out`, matching what validation.py implements.

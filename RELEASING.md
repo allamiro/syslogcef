@@ -6,8 +6,8 @@ which:
 
 1. Runs the test suite, then builds the sdist and wheel.
 2. Builds a noarch RPM (with the systemd service and configuration file)
-   in a Fedora container from [packaging/rpm/syslogcef.spec](packaging/rpm/syslogcef.spec).
-3. Builds a standalone executable zipapp (`syslogcef-X.Y.Z.pyz`), a
+   in a Fedora container from [packaging/rpm/syslog2cef.spec](packaging/rpm/syslog2cef.spec).
+3. Builds a standalone executable zipapp (`syslog2cef-X.Y.Z.pyz`), a
    Debian package via [packaging/debian/build-deb.sh](packaging/debian/build-deb.sh),
    and a source zip from `git archive`.
 4. Builds an Alpine APK with an OpenRC service in an Alpine container
@@ -23,11 +23,11 @@ which:
 ## Cutting a Release
 
 ```bash
-# 1. Update the version in pyproject.toml and packaging/rpm/syslogcef.spec
+# 1. Update the version in pyproject.toml and packaging/rpm/syslog2cef.spec
 # 2. Move the Unreleased section of CHANGELOG.md under the new version
 # 3. Commit via a PR, then tag the merge commit on main:
 git checkout main && git pull
-git tag -a vX.Y.Z -m "syslogcef X.Y.Z"
+git tag -a vX.Y.Z -m "syslog2cef X.Y.Z"
 git push origin vX.Y.Z
 ```
 
@@ -45,12 +45,19 @@ The publish job supports two methods; it picks automatically:
 2. Trusted publishing (OIDC, no token), used when the secret is absent.
    On pypi.org, under the project (or as a pending publisher for the
    first release): Publishing -> Add a new publisher with PyPI project
-   name `syslog2cef`, owner `allamiro`, repository `syslogcef`,
+   name `syslog2cef`, owner `allamiro`, repository `syslog2cef`,
    workflow `release.yml`, environment `pypi`.
 
-Note: the PyPI distribution is `syslog2cef` (the `syslogcef` name on
-PyPI belongs to an unrelated project); the import package and CLI
-remain `syslogcef`.
+Note: the project, repository, PyPI distribution and OS packages are all
+`syslog2cef`. The command and the importable Python package remain
+`syslogcef`, as do the config paths and unit names, so an existing install
+upgrades in place. The `syslogcef` name on PyPI belongs to an unrelated
+project, which is why the distribution has always been `syslog2cef`.
+
+The GPG key UID still reads "syslogcef release signing" and the key files
+keep their names (`RPM-GPG-KEY-syslogcef`, `packaging/apk/syslogcef.rsa.pub`):
+renaming them would invalidate verification for anyone who has already
+imported them.
 
 The GitHub environment named `pypi` already exists in the repository
 settings. Once either method is configured, every new tag publishes
@@ -75,8 +82,8 @@ Users verify with:
 
 ```bash
 gpg --import RPM-GPG-KEY-syslogcef
-gpg --verify syslogcef-X.Y.Z.tar.gz.asc syslogcef-X.Y.Z.tar.gz
-rpm --import RPM-GPG-KEY-syslogcef && rpm --checksig syslogcef-X.Y.Z-1.noarch.rpm
+gpg --verify syslog2cef-X.Y.Z.tar.gz.asc syslog2cef-X.Y.Z.tar.gz
+rpm --import RPM-GPG-KEY-syslogcef && rpm --checksig syslog2cef-X.Y.Z-1.noarch.rpm
 ```
 
 A backup of the private key and passphrase is stored offline by the

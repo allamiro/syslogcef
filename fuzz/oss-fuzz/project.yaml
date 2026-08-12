@@ -1,10 +1,10 @@
-# OSS-Fuzz project config for syslogcef. To enroll, copy this directory's
-# three files to projects/syslogcef/ in a fork of google/oss-fuzz and open
+# OSS-Fuzz project config for syslog2cef. To enroll, copy this directory's
+# three files to projects/syslog2cef/ in a fork of google/oss-fuzz and open
 # a PR — see fuzz/README.md for the process and eligibility notes.
-homepage: https://github.com/allamiro/syslogcef
+homepage: https://github.com/allamiro/syslog2cef
 language: python
 primary_contact: allamiro@gmail.com
-main_repo: https://github.com/allamiro/syslogcef.git
+main_repo: https://github.com/allamiro/syslog2cef.git
 fuzzing_engines:
   - libfuzzer
 # Python/Atheris projects support AddressSanitizer only; UBSan builds

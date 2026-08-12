@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/allamiro/syslogcef/main/docs/logo.svg" alt="syslogcef logo" width="540">
+  <img src="https://raw.githubusercontent.com/allamiro/syslog2cef/main/docs/logo.svg" alt="syslog2cef logo" width="540">
 </p>
 
-# syslogcef
+# syslog2cef
 
-syslogcef converts syslog events into ArcSight Common Event Format (CEF). It
+syslog2cef converts syslog events into ArcSight Common Event Format (CEF). It
 is a small, dependency-free Python package with a command line interface,
 built for feeding syslog data from network devices and Linux hosts into SIEM
 platforms that consume CEF.
@@ -27,19 +27,25 @@ platforms that consume CEF.
 
 ## Installation
 
-From PyPI (the distribution is named `syslog2cef` because the `syslogcef`
-name on PyPI belongs to an unrelated project; the import package and CLI
-are still `syslogcef`):
+From PyPI:
 
 ```bash
 pip install syslog2cef
 ```
 
+> **Naming.** The project, this repository, the PyPI distribution and the
+> RPM/DEB/APK packages are all `syslog2cef`. The command you run and the
+> Python package you import are `syslogcef`, unchanged — as are the config
+> paths (`/etc/syslogcef/`), the systemd units and the log directory, so
+> upgrading from an earlier release needs no changes. The `syslogcef` name
+> on PyPI belongs to an unrelated project, which is why the distribution
+> has always been `syslog2cef`.
+
 From source:
 
 ```bash
-git clone https://github.com/allamiro/syslogcef.git
-cd syslogcef
+git clone https://github.com/allamiro/syslog2cef.git
+cd syslog2cef
 pip install .
 ```
 
@@ -47,30 +53,30 @@ The GitHub releases page also provides, for every version:
 
 - An RPM package (Fedora/RHEL) with a systemd service — see "Running as a
   Service" below.
-- A Debian package (`syslogcef_X.Y.Z-1_all.deb`) with the same systemd
-  service: `sudo apt install ./syslogcef_X.Y.Z-1_all.deb`.
+- A Debian package (`syslog2cef_X.Y.Z-1_all.deb`) with the same systemd
+  service: `sudo apt install ./syslog2cef_X.Y.Z-1_all.deb`.
 - An Alpine APK with an OpenRC service:
-  `apk add --allow-untrusted syslogcef-X.Y.Z-r0.apk` (or install the
+  `apk add --allow-untrusted syslog2cef-X.Y.Z-r0.apk` (or install the
   signing key from [packaging/apk/syslogcef.rsa.pub](packaging/apk/syslogcef.rsa.pub)
   into `/etc/apk/keys/` first to verify).
-- A standalone executable (`syslogcef-X.Y.Z.pyz`) that runs on any system
-  with Python 3.9+: `chmod +x syslogcef-X.Y.Z.pyz && ./syslogcef-X.Y.Z.pyz`.
+- A standalone executable (`syslog2cef-X.Y.Z.pyz`) that runs on any system
+  with Python 3.9+: `chmod +x syslog2cef-X.Y.Z.pyz && ./syslog2cef-X.Y.Z.pyz`.
 - A source zip and sdist/wheel files.
 
 A multi-arch (amd64/arm64) container image is published to GitHub
 Container Registry on each release:
 
 ```bash
-docker run -i ghcr.io/allamiro/syslogcef < /var/log/syslog
+docker run -i ghcr.io/allamiro/syslog2cef < /var/log/syslog
 ```
 
 Fedora, RHEL/Alma/Rocky 9 and 10, and CentOS Stream users can install
-from the [COPR repository](https://copr.fedorainfracloud.org/coprs/allamiro/syslogcef/),
+from the [COPR repository](https://copr.fedorainfracloud.org/coprs/allamiro/syslog2cef/),
 which rebuilds automatically from every commit:
 
 ```bash
-sudo dnf copr enable allamiro/syslogcef
-sudo dnf install syslogcef
+sudo dnf copr enable allamiro/syslog2cef
+sudo dnf install syslog2cef
 ```
 
 Every asset ships with a detached GPG signature (`.asc`) and is listed in
@@ -81,7 +87,7 @@ signatures. The public key is committed at
 ## Command Line Usage
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/allamiro/syslogcef/main/docs/demo.svg" alt="Animated demo of syslogcef converting different formats" width="820">
+  <img src="https://raw.githubusercontent.com/allamiro/syslog2cef/main/docs/demo.svg" alt="Animated demo of syslog2cef converting different formats" width="820">
 </p>
 
 ```bash
@@ -271,7 +277,7 @@ configuration in `/etc/conf.d/syslogcef`):
 - `/etc/logrotate.d/syslogcef` — daily rotation for flat `.cef` archives.
 
 ```bash
-sudo dnf install syslogcef-*.rpm
+sudo dnf install syslog2cef-*.rpm
 sudo vi /etc/syslogcef/syslogcef.conf
 sudo systemctl enable --now syslogcef
 ```
@@ -354,8 +360,8 @@ issues for security reports.
 ## Development
 
 ```bash
-git clone https://github.com/allamiro/syslogcef.git
-cd syslogcef
+git clone https://github.com/allamiro/syslog2cef.git
+cd syslog2cef
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .[test]

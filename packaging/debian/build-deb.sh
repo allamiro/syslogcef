@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build the syslogcef Debian package.
+# Build the syslog2cef Debian package.
 # Usage: build-deb.sh <version> <path-to-zipapp> <output-dir>
 set -euo pipefail
 
@@ -8,7 +8,7 @@ PYZ="$2"
 OUTDIR="$3"
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-STAGE="$(mktemp -d)/syslogcef"
+STAGE="$(mktemp -d)/syslog2cef"
 
 mkdir -p \
   "$STAGE/DEBIAN" \
@@ -17,7 +17,7 @@ mkdir -p \
   "$STAGE/etc/syslogcef/conf.d" \
   "$STAGE/etc/logrotate.d" \
   "$STAGE/usr/lib/sysusers.d" \
-  "$STAGE/usr/share/doc/syslogcef" \
+  "$STAGE/usr/share/doc/syslog2cef" \
   "$STAGE/usr/share/man/man1"
 
 install -m 0755 "$PYZ" "$STAGE/usr/bin/syslogcef"
@@ -27,14 +27,14 @@ install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef.conf" "$STAGE/etc/syslogcef/
 install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef-instance.conf" "$STAGE/etc/syslogcef/conf.d/example.conf.sample"
 install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef.logrotate" "$STAGE/etc/logrotate.d/syslogcef"
 install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef.sysusers" "$STAGE/usr/lib/sysusers.d/syslogcef.conf"
-install -m 0644 "$REPO_ROOT/README.md" "$REPO_ROOT/LICENSE" "$REPO_ROOT/CHANGELOG.md" "$STAGE/usr/share/doc/syslogcef/"
+install -m 0644 "$REPO_ROOT/README.md" "$REPO_ROOT/LICENSE" "$REPO_ROOT/CHANGELOG.md" "$STAGE/usr/share/doc/syslog2cef/"
 install -m 0644 "$REPO_ROOT/packaging/rpm/syslogcef.1" "$STAGE/usr/share/man/man1/syslogcef.1"
 gzip -9n "$STAGE/usr/share/man/man1/syslogcef.1"
 
 INSTALLED_SIZE=$(du -sk "$STAGE" | cut -f1)
 
 cat > "$STAGE/DEBIAN/control" <<EOF
-Package: syslogcef
+Package: syslog2cef
 Version: ${VERSION}-1
 Section: admin
 Priority: optional
@@ -42,9 +42,12 @@ Architecture: all
 Depends: python3 (>= 3.9)
 Installed-Size: ${INSTALLED_SIZE}
 Maintainer: Tamir Suliman <allamiro@gmail.com>
-Homepage: https://github.com/allamiro/syslogcef
+Provides: syslogcef
+Replaces: syslogcef
+Conflicts: syslogcef
+Homepage: https://github.com/allamiro/syslog2cef
 Description: Convert syslog events to ArcSight CEF
- syslogcef converts syslog events (RFC3164, RFC5424, rsyslog, and systemd
+ syslog2cef converts syslog events (RFC3164, RFC5424, rsyslog, and systemd
  journal exports) into ArcSight Common Event Format (CEF), with bundled
  vendor mappings for Cisco ASA/IOS, F5, Linux, and VMware sources.
  .
@@ -92,4 +95,4 @@ EOF
 chmod 0755 "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/prerm" "$STAGE/DEBIAN/postrm"
 
 mkdir -p "$OUTDIR"
-dpkg-deb --build --root-owner-group "$STAGE" "$OUTDIR/syslogcef_${VERSION}-1_all.deb"
+dpkg-deb --build --root-owner-group "$STAGE" "$OUTDIR/syslog2cef_${VERSION}-1_all.deb"

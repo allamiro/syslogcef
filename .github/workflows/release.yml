@@ -73,7 +73,7 @@ jobs:
       - name: Build RPM
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          sed -i "s/^Version:.*/Version:        ${VERSION}/" packaging/rpm/syslogcef.spec
+          sed -i "s/^Version:.*/Version:        ${VERSION}/" packaging/rpm/syslog2cef.spec
           rpmdev-setuptree
           cp dist/syslog2cef-*.tar.gz "$HOME/rpmbuild/SOURCES/"
           cp packaging/rpm/syslogcef.service packaging/rpm/syslogcef@.service packaging/rpm/syslogcef.conf packaging/rpm/syslogcef-instance.conf packaging/rpm/syslogcef.logrotate packaging/rpm/syslogcef.sysusers packaging/rpm/syslogcef.1 "$HOME/rpmbuild/SOURCES/"
@@ -81,14 +81,14 @@ jobs:
           # (%pyproject_buildrequires), then do the real build. When every
           # requirement is already installed, rpmbuild -br succeeds without
           # emitting a buildreqs package, so only run builddep if one exists.
-          rpmbuild -br packaging/rpm/syslogcef.spec || true
-          if ls "$HOME"/rpmbuild/SRPMS/syslogcef-*.buildreqs.nosrc.rpm >/dev/null 2>&1; then
-            dnf builddep -y "$HOME"/rpmbuild/SRPMS/syslogcef-*.buildreqs.nosrc.rpm
+          rpmbuild -br packaging/rpm/syslog2cef.spec || true
+          if ls "$HOME"/rpmbuild/SRPMS/syslog2cef-*.buildreqs.nosrc.rpm >/dev/null 2>&1; then
+            dnf builddep -y "$HOME"/rpmbuild/SRPMS/syslog2cef-*.buildreqs.nosrc.rpm
           fi
-          rpmbuild -ba packaging/rpm/syslogcef.spec
+          rpmbuild -ba packaging/rpm/syslog2cef.spec
           mkdir -p rpms
-          cp "$HOME"/rpmbuild/RPMS/noarch/syslogcef-*.rpm rpms/
-          cp "$HOME"/rpmbuild/SRPMS/syslogcef-*.src.rpm rpms/
+          cp "$HOME"/rpmbuild/RPMS/noarch/syslog2cef-*.rpm rpms/
+          cp "$HOME"/rpmbuild/SRPMS/syslog2cef-*.src.rpm rpms/
 
       - name: Sign RPM
         if: env.GPG_PRIVATE_KEY != ''
@@ -131,22 +131,22 @@ jobs:
           python -m zipapp build/zipapp \
             -m "syslogcef.cli:main" \
             -p "/usr/bin/env python3" \
-            -c -o "out/syslogcef-${VERSION}.pyz"
+            -c -o "out/syslog2cef-${VERSION}.pyz"
           echo "conversion smoke test:" \
             && echo '<166>Jan  1 12:34:56 fw1 %ASA-6-302013: Built inbound src=1.2.3.4' \
-              | "out/syslogcef-${VERSION}.pyz"
+              | "out/syslog2cef-${VERSION}.pyz"
 
       - name: Build Debian package
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          bash packaging/debian/build-deb.sh "$VERSION" "out/syslogcef-${VERSION}.pyz" out
-          dpkg-deb --info "out/syslogcef_${VERSION}-1_all.deb"
+          bash packaging/debian/build-deb.sh "$VERSION" "out/syslog2cef-${VERSION}.pyz" out
+          dpkg-deb --info "out/syslog2cef_${VERSION}-1_all.deb"
 
       - name: Build source zip
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          git archive --format=zip --prefix="syslogcef-${VERSION}/" \
-            -o "out/syslogcef-${VERSION}-source.zip" HEAD
+          git archive --format=zip --prefix="syslog2cef-${VERSION}/" \
+            -o "out/syslog2cef-${VERSION}-source.zip" HEAD
 
       - name: Sign artifacts
         if: env.GPG_PRIVATE_KEY != ''
@@ -205,7 +205,7 @@ jobs:
           python3 -m zipapp build/zipapp \
             -m "syslogcef.cli:main" \
             -p "/usr/bin/env python3" \
-            -c -o "packaging/apk/syslogcef-${VERSION}.pyz"
+            -c -o "packaging/apk/syslog2cef-${VERSION}.pyz"
 
           cp packaging/rpm/syslogcef.1 packaging/apk/
           sed -i "s/^pkgver=.*/pkgver=${VERSION}/" packaging/apk/APKBUILD
@@ -213,7 +213,7 @@ jobs:
           su builder -c "cd packaging/apk && abuild checksum && abuild -r"
 
           mkdir -p out
-          cp /home/builder/packages/packaging/*/syslogcef-*.apk out/
+          cp /home/builder/packages/packaging/*/syslog2cef-*.apk out/
 
       - name: Sign APK with GPG (detached)
         if: env.GPG_PRIVATE_KEY != ''
@@ -254,7 +254,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/syslogcef
+          images: ghcr.io/${{ github.repository_owner }}/syslog2cef
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest

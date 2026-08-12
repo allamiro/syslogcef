@@ -1,4 +1,4 @@
-# Fuzzing syslogcef
+# Fuzzing syslog2cef
 
 Three layers, from fastest to deepest:
 
@@ -65,8 +65,8 @@ crash warrants one.
 
 `oss-fuzz/` contains a ready `project.yaml`, `Dockerfile`, and
 `build.sh`. To apply: fork [google/oss-fuzz], copy those three files to
-`projects/syslogcef/`, and open a PR. Note Google's [acceptance
-criteria] favor widely-used projects — apply once syslogcef has
+`projects/syslog2cef/`, and open a PR. Note Google's [acceptance
+criteria] favor widely-used projects — apply once syslog2cef has
 meaningful adoption (e.g. official distro packaging); until then
 ClusterFuzzLite provides the same engine on our own runners.
 

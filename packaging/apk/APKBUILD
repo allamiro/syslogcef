@@ -1,17 +1,20 @@
 # Maintainer: Tamir Suliman <allamiro@gmail.com>
-pkgname=syslogcef
-pkgver=0.3.3
+pkgname=syslog2cef
+pkgver=0.3.4
 pkgrel=0
 pkgdesc="Convert syslog events to ArcSight CEF"
-url="https://github.com/allamiro/syslogcef"
+url="https://github.com/allamiro/syslog2cef"
 arch="noarch"
 license="MIT"
 depends="python3"
 options="!check"
-source="syslogcef-$pkgver.pyz syslogcef.initd syslogcef.confd syslogcef.1"
+# Renamed from syslogcef in 0.3.4; the command and paths are unchanged.
+provides="syslogcef=$pkgver-r$pkgrel"
+replaces="syslogcef"
+source="syslog2cef-$pkgver.pyz syslogcef.initd syslogcef.confd syslogcef.1"
 
 package() {
-	install -Dm755 "$srcdir"/syslogcef-$pkgver.pyz "$pkgdir"/usr/bin/syslogcef
+	install -Dm755 "$srcdir"/syslog2cef-$pkgver.pyz "$pkgdir"/usr/bin/syslogcef
 	install -Dm755 "$srcdir"/syslogcef.initd "$pkgdir"/etc/init.d/syslogcef
 	install -Dm644 "$srcdir"/syslogcef.confd "$pkgdir"/etc/conf.d/syslogcef
 	install -Dm644 "$srcdir"/syslogcef.1 "$pkgdir"/usr/share/man/man1/syslogcef.1

@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a defect in syslogcef
+about: Report a defect in syslog2cef
 title: ''
 labels: bug
 assignees: allamiro
@@ -24,6 +24,6 @@ What you expected to happen.
 What actually happened, including any traceback.
 
 **Environment**
-- syslogcef version:
+- syslog2cef version:
 - Python version:
 - Operating system:

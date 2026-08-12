@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-08-12
+
+### Changed
+
+- The project, GitHub repository, and the RPM, Debian and Alpine packages are
+  now all named `syslog2cef`, matching the PyPI distribution and removing the
+  long-standing mismatch. The container image is now
+  `ghcr.io/allamiro/syslog2cef`, and release artifacts are named
+  `syslog2cef-X.Y.Z.*`.
+- **Unchanged, deliberately:** the `syslogcef` command, the importable
+  `syslogcef` Python package, the config paths (`/etc/syslogcef/`), the
+  systemd unit names, the log directory and the `syslogcef` system user. An
+  existing install therefore upgrades in place — the RPM carries
+  `Provides`/`Obsoletes`, the Alpine package `provides`/`replaces`, and the
+  Debian package `Provides`/`Replaces`/`Conflicts` for the old name.
+- The signing keys keep their filenames and UID (`RPM-GPG-KEY-syslogcef`,
+  `packaging/apk/syslogcef.rsa.pub`, "syslogcef release signing"): renaming
+  them would invalidate verification for anyone who already imported them.
+
 ## [0.3.3] - 2026-08-12
 
 ### Fixed
@@ -317,8 +336,8 @@ Validated against all 543 filebeat module test logs from elastic/beats
 - `syslogcef(1)` man page, installed by the RPM, Debian, and Alpine
   packages.
 - Multi-arch (amd64/arm64) container image published to
-  `ghcr.io/allamiro/syslogcef` on each release.
-- COPR repository (`allamiro/syslogcef`) building for Fedora, EPEL 9/10,
+  `ghcr.io/allamiro/syslog2cef` on each release.
+- COPR repository (`allamiro/syslog2cef`) building for Fedora, EPEL 9/10,
   and CentOS Stream 9/10 on x86_64 and aarch64, rebuilt automatically on
   every push.
 
@@ -360,17 +379,18 @@ Initial release.
 - `--tail` now follows all given input files instead of blocking on the
   first one.
 
-[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.3.3...HEAD
-[0.3.3]: https://github.com/allamiro/syslogcef/compare/v0.3.2...v0.3.3
-[0.3.2]: https://github.com/allamiro/syslogcef/compare/v0.3.1...v0.3.2
-[0.3.1]: https://github.com/allamiro/syslogcef/compare/v0.3.0...v0.3.1
-[0.3.0]: https://github.com/allamiro/syslogcef/compare/v0.2.1...v0.3.0
-[0.2.1]: https://github.com/allamiro/syslogcef/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/allamiro/syslogcef/compare/v0.1.6...v0.2.0
-[0.1.6]: https://github.com/allamiro/syslogcef/compare/v0.1.5...v0.1.6
-[0.1.5]: https://github.com/allamiro/syslogcef/compare/v0.1.4...v0.1.5
-[0.1.4]: https://github.com/allamiro/syslogcef/compare/v0.1.3...v0.1.4
-[0.1.3]: https://github.com/allamiro/syslogcef/compare/v0.1.2...v0.1.3
-[0.1.2]: https://github.com/allamiro/syslogcef/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/allamiro/syslogcef/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/allamiro/syslogcef/releases/tag/v0.1.0
+[Unreleased]: https://github.com/allamiro/syslog2cef/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/allamiro/syslog2cef/compare/v0.3.3...v0.3.4
+[0.3.3]: https://github.com/allamiro/syslog2cef/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/allamiro/syslog2cef/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/allamiro/syslog2cef/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/allamiro/syslog2cef/compare/v0.2.1...v0.3.0
+[0.2.1]: https://github.com/allamiro/syslog2cef/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/allamiro/syslog2cef/compare/v0.1.6...v0.2.0
+[0.1.6]: https://github.com/allamiro/syslog2cef/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/allamiro/syslog2cef/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/allamiro/syslog2cef/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/allamiro/syslog2cef/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/allamiro/syslog2cef/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/allamiro/syslog2cef/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/allamiro/syslog2cef/releases/tag/v0.1.0
