@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from syslogcef import convert_line, normalize_event, parse_syslog, to_cef
 from syslogcef.mappings import CISCO_ASA
 
@@ -45,8 +47,23 @@ def test_default_linux_mapping_does_not_crash():
     assert "linux.syslog" in cef
 
 
-def test_invalid_mapping_template_degrades_gracefully():
+def test_invalid_mapping_template_is_rejected_before_processing():
+    # Originally (#2) a malformed template crashed the pipeline once per
+    # event, so _format was made to degrade gracefully. Structural
+    # validation now rejects the mapping at load time instead, which serves
+    # the same intent — no mid-stream failure — while telling the operator
+    # what is wrong rather than silently emitting a defaulted header.
     line = "<13>Jan  2 10:00:00 web01 sshd[123]: Failed password for root"
     mapping = {"eventClassId": "broken.%{msgid}"}
-    cef = convert_line(line, mapping=mapping)
+    with pytest.raises(ValueError, match="invalid format specifier"):
+        convert_line(line, mapping=mapping)
+
+
+def test_unsatisfiable_conversion_still_degrades_gracefully():
+    # The runtime safety net in _format remains for data-dependent failures
+    # that eager validation cannot detect: the syntax is valid, but a string
+    # kv value cannot satisfy %d. The event must still render.
+    line = "<13>Jan  2 10:00:00 web01 sshd[123]: dstport=notaport"
+    cef = convert_line(line, mapping={"extensions": {"dpt": "%(dpt)d"}})
     assert cef.startswith("CEF:0|")
+    assert "dpt=" not in cef

@@ -89,3 +89,45 @@ def test_programmatic_mapping_is_validated(mapping, message):
 def test_mapping_rejects_extension_keys_that_break_cef_structure():
     with pytest.raises(ValueError, match="invalid extension key"):
         convert_line("plain log", mapping={"extensions": {"bad key": "value"}})
+
+
+@pytest.mark.parametrize(
+    "mapping, message",
+    [
+        # A malformed template used to render as "" and then silently fall the
+        # header back to its default or drop the extension entirely.
+        ({"deviceVendor": "%(broken"}, "invalid format specifier"),
+        ({"deviceVendor": "%q"}, "invalid format specifier"),
+        ({"name": "100% clean"}, "invalid format specifier"),
+        ({"deviceVendor": "%()s"}, "empty format key"),
+        # "*" width consumes a positional argument a mapping cannot supply.
+        ({"extensions": {"src": "%(src)*d"}}, "invalid format specifier"),
+        ({"extensions": {"src": "%(broken"}}, "invalid format specifier"),
+    ],
+)
+def test_malformed_templates_fail_before_rendering(mapping, message):
+    with pytest.raises(ValueError, match=message):
+        convert_line("plain log", mapping=mapping)
+
+
+@pytest.mark.parametrize(
+    "mapping",
+    [
+        {"deviceVendor": "%(host)s"},
+        {"name": "100%% clean"},
+        {"deviceVendor": "Acme"},
+        {"extensions": {"src": "%(src)s:%(spt)s"}},
+        # Numeric conversions are syntactically valid; whether a given field
+        # can satisfy one is data-dependent and handled at render time.
+        {"extensions": {"sev": "%(severity)03d"}},
+    ],
+)
+def test_valid_templates_are_accepted(mapping):
+    assert convert_line(
+        "<14>Jan  1 12:34:56 fw1 app: src=1.1.1.1 spt=5", mapping=mapping
+    ).startswith("CEF:0|")
+
+
+def test_literal_percent_template_renders():
+    cef = convert_line("plain log", mapping={"name": "100%% clean"})
+    assert cef.split("|")[5] == "100% clean"

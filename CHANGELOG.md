@@ -23,6 +23,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSON mapping files. Invalid header/extension templates, severity maps, and
   extension keys now fail clearly instead of raising during rendering or
   producing structurally invalid CEF.
+- Malformed `%`-format templates are rejected when the mapping is loaded
+  rather than degrading silently per event. Previously a template such as
+  `%{msgid}` or a literal `100% clean` rendered as an empty string, which
+  fell a header back to its default or dropped an extension without any
+  indication in the output. Use `%%` for a literal percent sign. Templates
+  whose syntax is valid but whose conversion a given value cannot satisfy
+  (`%(dpt)d` against a non-numeric field) still degrade gracefully at render
+  time, so a malformed mapping can no longer be discovered only after
+  millions of records have been written.
+- Case normalization of canonical CEF keys no longer depends on the order
+  fields appear in a message: an explicitly lowercase `deviceexternalid=`
+  now wins over `DEVICEEXTERNALID=` in either order.
+
+### Changed
+
+- **Behavior change.** A mapping with a malformed template is now a
+  configuration error (`ValueError`) instead of being tolerated with
+  degraded output. All bundled mappings validate cleanly; a custom mapping
+  that relied on the previous silent fallback must quote literal percent
+  signs as `%%`.
 
 ## [0.3.2] - 2026-08-12
 

@@ -92,3 +92,18 @@ def test_case_normalization_keeps_explicit_canonical_value():
     event = normalize_event(parse_syslog(line, now=NOW))
 
     assert event.kv["src"] == "10.0.0.1"
+
+
+def test_canonical_casing_does_not_depend_on_message_order():
+    # The explicitly lowercase spelling must win regardless of which spelling
+    # appears first; the canonical key used to be built from whichever
+    # original spelling the iteration reached first.
+    for body in (
+        "DEVICEEXTERNALID=old deviceexternalid=new",
+        "deviceexternalid=new DEVICEEXTERNALID=old",
+    ):
+        event = normalize_event(
+            parse_syslog(f"<14>Jan  1 12:34:56 fw1 app: {body} a=1", now=NOW)
+        )
+        assert event.kv["deviceExternalId"] == "new"
+        assert event.kv["DEVICEEXTERNALID"] == "old"

@@ -21,6 +21,39 @@ _MAPPING_HEADER_KEYS = (
 )
 _EXTENSION_KEY_RE = re.compile(r"^[A-Za-z0-9_.]+$")
 
+# One printf-style conversion as templates are rendered (``template % fields``):
+# either a literal "%%" or a mapping key followed by optional flags, width,
+# precision and length modifier. A width/precision of "*" is deliberately
+# excluded because it consumes positional arguments a mapping cannot supply.
+_FORMAT_SPEC_RE = re.compile(
+    r"%(?:%|\((?P<key>[^)]*)\)[#0\- +]*\d*(?:\.\d+)?[hlL]?[diouxXeEfFgGcrsa])"
+)
+
+
+def _validate_template(template: str, where: str, what: str) -> None:
+    """Reject a template that cannot render, before any record is produced.
+
+    ``MappingResolver._format`` swallows a rendering failure and returns "",
+    which silently falls a header back to its default or drops an extension.
+    A malformed template is a configuration error, so surface it eagerly.
+    """
+    position = 0
+    while True:
+        start = template.find("%", position)
+        if start == -1:
+            return
+        match = _FORMAT_SPEC_RE.match(template, start)
+        if match is None:
+            raise ValueError(
+                f"{where}: {what} template {template!r} has an invalid format "
+                f"specifier at index {start} (use '%%' for a literal percent)"
+            )
+        if match.group("key") is not None and not match.group("key"):
+            raise ValueError(
+                f"{where}: {what} template {template!r} has an empty format key"
+            )
+        position = match.end()
+
 
 @dataclass
 class ParseResult:
@@ -88,8 +121,10 @@ def _load_mapping(mapping: Mapping[str, Any] | Path | str | None) -> Mapping[str
         if key in data and not isinstance(data[key], Mapping):
             raise ValueError(f"{where}: '{key}' must be an object")
     for key in _MAPPING_HEADER_KEYS:
-        if key in data and not isinstance(data[key], str):
-            raise ValueError(f"{where}: '{key}' must be a string")
+        if key in data:
+            if not isinstance(data[key], str):
+                raise ValueError(f"{where}: '{key}' must be a string")
+            _validate_template(data[key], where, f"header {key!r}")
     for key, template in data.get("extensions", {}).items():
         if not isinstance(key, str) or not _EXTENSION_KEY_RE.fullmatch(key):
             raise ValueError(f"{where}: invalid extension key {key!r}")
@@ -97,6 +132,7 @@ def _load_mapping(mapping: Mapping[str, Any] | Path | str | None) -> Mapping[str
             raise ValueError(
                 f"{where}: extension template for {key!r} must be a string"
             )
+        _validate_template(template, where, f"extension {key!r}")
     for source, target in data.get("severity_map", {}).items():
         source_text, target_text = str(source), str(target)
         if not (

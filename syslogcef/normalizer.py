@@ -127,10 +127,15 @@ def _derive_common_fields(event: NormalizedEvent) -> None:
     # Restore the dictionary's exact spelling for canonical camelCase CEF
     # keys (DeviceExternalId -> deviceExternalId), again without overwrite.
     canonical_by_lower = {key.lower(): key for key in cef_keys()}
-    for key, value in list(event.kv.items()):
-        canonical = canonical_by_lower.get(key.lower())
+    for key in list(event.kv):
+        lower = key.lower()
+        canonical = canonical_by_lower.get(lower)
         if canonical is not None and canonical not in event.kv:
-            event.kv[canonical] = value
+            # Take the folded lowercase value rather than this spelling.
+            # The loop above already applied lowercase-wins precedence, so
+            # an explicit deviceexternalid= beats DEVICEEXTERNALID=
+            # regardless of which appeared first in the message.
+            event.kv[canonical] = event.kv.get(lower, event.kv[key])
 
     for alias, canonical in field_aliases().items():
         if canonical not in event.kv and alias in event.kv:
