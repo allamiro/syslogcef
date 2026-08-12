@@ -1,5 +1,5 @@
 Name:           syslogcef
-Version:        0.3.1
+Version:        0.3.2
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -87,6 +87,11 @@ install -D -m 0644 %{SOURCE7} %{buildroot}%{_sysusersdir}/syslogcef.conf
 %{_sysusersdir}/syslogcef.conf
 
 %changelog
+* Wed Aug 12 2026 Tamir Suliman <allamiro@gmail.com> - 0.3.2-1
+- Map the syslog host to shost (source) instead of dhost (destination)
+- Order header parsers before kv so RFC3164 lines with key=value
+  message bodies (containerd, dockerd) parse correctly
+
 * Tue Aug 11 2026 Tamir Suliman <allamiro@gmail.com> - 0.3.1-1
 - Scope continuation context per input file; inherit continuations
   under a forced --mode; emit dvcpid only for numeric pids

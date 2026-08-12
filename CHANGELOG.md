@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-08-12
+
+### Fixed
+
+- The syslog HOSTNAME now maps to `shost` (source host) instead of
+  `dhost` (destination): the host that emitted a syslog line is the
+  event's source, not a destination. `dhost` stays reserved for
+  network-specific logs whose payload names a real destination. Applied
+  in the bundled Linux mapping and the default mapping (`shost`, max
+  1023 chars, so long RFC 5424 hostnames still pass `--strict`).
+- An ordinary RFC3164 / journald-short line whose message body carries
+  `key=value` pairs (containerd, dockerd, NetworkManager, systemd) is no
+  longer misparsed as the kv format: the header-based parsers now run
+  before the kv detector, so host/app are extracted and the syslog
+  header is not leaked into the message. Genuine kv streams (Fortinet,
+  Sophos) still parse as kv.
+
 ## [0.3.1] - 2026-08-11
 
 ### Fixed
@@ -289,7 +306,8 @@ Initial release.
 - `--tail` now follows all given input files instead of blocking on the
   first one.
 
-[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/allamiro/syslogcef/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/allamiro/syslogcef/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/allamiro/syslogcef/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/allamiro/syslogcef/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/allamiro/syslogcef/compare/v0.2.0...v0.2.1
