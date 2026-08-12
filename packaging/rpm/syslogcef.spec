@@ -1,5 +1,5 @@
 Name:           syslogcef
-Version:        0.3.2
+Version:        0.3.3
 Release:        1%{?dist}
 Summary:        Convert syslog events to ArcSight CEF
 
@@ -87,6 +87,15 @@ install -D -m 0644 %{SOURCE7} %{buildroot}%{_sysusersdir}/syslogcef.conf
 %{_sysusersdir}/syslogcef.conf
 
 %changelog
+* Wed Aug 12 2026 Tamir Suliman <allamiro@gmail.com> - 0.3.3-1
+- Stop a cached hostless adaptive layout from suppressing hosts on later
+  lines; keep IPv6 hosts intact and retain ts_orig
+- Treat parsed syslog envelope metadata as authoritative over same-named
+  message key=value pairs
+- Match field names case-insensitively; support escaped quotes and
+  comma-delimited key=value pairs
+- Validate programmatic mappings and reject malformed templates at load
+
 * Wed Aug 12 2026 Tamir Suliman <allamiro@gmail.com> - 0.3.2-1
 - Map the syslog host to shost (source) instead of dhost (destination)
 - Order header parsers before kv so RFC3164 lines with key=value
