@@ -382,7 +382,11 @@ def _optional_path(value: str) -> Optional[Path]:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Convert syslog lines to ArcSight CEF")
+    # prog is explicit so "python -m syslogcef --help" reports the command
+    # name rather than "__main__.py".
+    parser = argparse.ArgumentParser(
+        prog="syslogcef", description="Convert syslog lines to ArcSight CEF"
+    )
     parser.add_argument("paths", nargs="*", type=Path, help="Input files (defaults to stdin)")
     parser.add_argument("-o", "--output", type=_optional_path, help="Output file; strftime codes such as %%Y-%%m-%%d or %%H start a new file when the rendered path changes (templated paths always append and parent directories are created). Use %%%% for a literal percent; unsupported codes are rejected. An empty value means stdout.")
     parser.add_argument("-a", "--append", action="store_true", help="Append to --output instead of truncating it (implied for templated paths)")

@@ -176,3 +176,28 @@ def test_cli_output_template_end_to_end(tmp_path: Path):
     files = list((tmp_path / "cef").rglob("events.cef"))
     assert len(files) == 1
     assert "CEF:0" in files[0].read_text(encoding="utf-8")
+
+
+def test_cli_reports_the_command_name_not_the_module_file():
+    # "python -m syslogcef --help" used to report "usage: __main__.py".
+    import subprocess
+    import sys
+
+    out = subprocess.run(
+        [sys.executable, "-m", "syslogcef", "--help"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    assert out.startswith("usage: syslogcef ")
+    assert "__main__.py" not in out
+
+
+def test_man_page_source_field_names_the_project():
+    # The third .TH field is the source package, which is syslog2cef; the
+    # page name stays SYSLOGCEF because that is the command.
+    from pathlib import Path
+
+    first = Path(__file__).resolve().parent.parent.joinpath(
+        "packaging/rpm/syslogcef.1"
+    ).read_text().splitlines()[0]
+    assert first.startswith(".TH SYSLOGCEF 1 ")
+    assert '"syslog2cef ' in first
