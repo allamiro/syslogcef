@@ -111,7 +111,17 @@ def _normalize_host_token(token: str) -> str:
     """
     if is_ip(token):
         return token
-    return token.rstrip(":,")
+    # A layout delimiter may follow a compressed literal that itself ends in
+    # "::" ("2001:db8::,"), where neither the whole token nor a full strip
+    # yields the address. Remove one trailing separator at a time and keep
+    # the first candidate that parses, falling back to the fully stripped
+    # token for ordinary hostnames ("host::", "host:,").
+    candidate = token
+    while candidate and candidate[-1] in ":,":
+        candidate = candidate[:-1]
+        if is_ip(candidate):
+            return candidate
+    return candidate
 
 
 _CACHE: Dict[str, Tuple[Pattern[str], str, Callable]] = {}

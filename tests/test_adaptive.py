@@ -288,3 +288,32 @@ def test_adaptive_compressed_ipv6_host_is_not_truncated(host):
     clear_cache()
     assert parse_syslog(f"2021/05/01 10:00:00 {host} session up").host == host
     assert parse_syslog(f"2021/05/02 11:00:00 {host} session down").host == host
+
+
+@pytest.mark.parametrize(
+    "token, expected",
+    [
+        ("2001:db8::", "2001:db8::"),
+        ("2001:db8::,", "2001:db8::"),
+        ("fe80::,", "fe80::"),
+        ("2001:db8::1,", "2001:db8::1"),
+        ("10.1.1.5,", "10.1.1.5"),
+        ("fw-edge-01::", "fw-edge-01"),
+        ("fw-edge-01:,", "fw-edge-01"),
+        ("fw1:", "fw1"),
+        ("fw1", "fw1"),
+    ],
+)
+def test_host_token_delimiter_stripping(token, expected):
+    from syslogcef.adaptive import _normalize_host_token
+
+    assert _normalize_host_token(token) == expected
+
+
+@pytest.mark.parametrize("host", ["2001:db8::", "fe80::", "2001:db8::1", "10.1.1.5"])
+def test_adaptive_ip_host_followed_by_comma(host):
+    # Neither the whole token nor a full ":," strip yields the address when a
+    # compressed literal ending in "::" is followed by a delimiter.
+    clear_cache()
+    assert parse_syslog(f"2021/05/01 10:00:00 {host}, session up").host == host
+    assert parse_syslog(f"2021/05/02 11:00:00 {host}, session down").host == host
