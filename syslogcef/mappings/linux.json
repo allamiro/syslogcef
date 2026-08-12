@@ -5,7 +5,7 @@
   "eventClassId": "linux.syslog",
   "name": "%(message_short)s",
   "extensions": {
-    "dhost": "%(host)s",
+    "shost": "%(host)s",
     "sproc": "%(app)s",
     "dvcpid": "%(dvcpid)s",
     "cs1Label": "rawEvent",

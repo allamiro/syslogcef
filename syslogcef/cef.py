@@ -28,6 +28,14 @@ DEFAULT_MAPPING = {
     },
     "extensions": {
         "msg": "%(msg)s",
+        # The syslog HOSTNAME identifies the device that GENERATED the
+        # event, so it is the source host (shost) — never the destination
+        # (dhost), which is reserved for network-specific logs whose
+        # payload names an actual destination. shost (max 1023) rather
+        # than dvchost (max 100): RFC 5424 hostnames may reach 255 chars,
+        # which would fail --strict against dvchost's dictionary limit.
+        # Empty values are dropped, so this is a no-op for a hostless line.
+        "shost": "%(host)s",
         # Event time (epoch milliseconds) parsed from the line, or the
         # processing time when the line carried no usable timestamp.
         "rt": "%(rt)s",
