@@ -18,14 +18,29 @@ logger = logging.getLogger(__name__)
 
 _EXTENSION_KEY_RE = re.compile(r"^[A-Za-z0-9_.]+$")
 
-# One printf-style conversion as templates are rendered (``template % fields``):
-# either a literal "%%" or a mapping key followed by optional flags, width,
-# precision and length modifier. A width/precision of "*" is deliberately
-# excluded because it consumes positional arguments a mapping cannot supply.
-_FORMAT_SPEC_RE = re.compile(
-    # A bare "." precision is legal Python (it means zero), so \d* not \d+.
-    r"%(?:%|\((?P<key>[^)]*)\)[#0\- +]*\d*(?:\.\d*)?[hlL]?[diouxXeEfFgGcrsa])"
-)
+# What may follow a mapping key in ``template % fields``: flags, width,
+# precision, length modifier, conversion. A width/precision of "*" is
+# deliberately excluded because it consumes a positional argument a mapping
+# cannot supply. A bare "." precision is legal Python (it means zero).
+_FORMAT_TAIL_RE = re.compile(r"[#0\- +]*\d*(?:\.\d*)?[hlL]?[diouxXeEfFgGcrsa]")
+
+
+def _scan_format_key(template: str, start: int) -> int:
+    """Return the index just past a mapping key's closing paren, or -1.
+
+    Mirrors CPython's own scan, which counts nesting rather than stopping at
+    the first ")": "%((a))s" is a valid reference to the key "(a)", while
+    "%(a(b)s" is an incomplete key that raises at render time.
+    """
+    depth = 1
+    for index in range(start, len(template)):
+        if template[index] == "(":
+            depth += 1
+        elif template[index] == ")":
+            depth -= 1
+            if depth == 0:
+                return index + 1
+    return -1
 
 
 def _validate_template(template: str, where: str, what: str) -> None:
@@ -35,22 +50,33 @@ def _validate_template(template: str, where: str, what: str) -> None:
     which silently falls a header back to its default or drops an extension.
     A malformed template is a configuration error, so surface it eagerly.
     """
+
+    def fail(problem: str) -> None:
+        raise ValueError(f"{where}: {what} template {template!r} {problem}")
+
     position = 0
     while True:
         start = template.find("%", position)
         if start == -1:
             return
-        match = _FORMAT_SPEC_RE.match(template, start)
-        if match is None:
-            raise ValueError(
-                f"{where}: {what} template {template!r} has an invalid format "
-                f"specifier at index {start} (use '%%' for a literal percent)"
+        cursor = start + 1
+        if cursor < len(template) and template[cursor] == "%":
+            position = cursor + 1
+            continue
+        if cursor >= len(template) or template[cursor] != "(":
+            fail(
+                f"has an invalid format specifier at index {start} "
+                "(use '%%' for a literal percent)"
             )
-        if match.group("key") is not None and not match.group("key"):
-            raise ValueError(
-                f"{where}: {what} template {template!r} has an empty format key"
-            )
-        position = match.end()
+        key_end = _scan_format_key(template, cursor + 1)
+        if key_end == -1:
+            fail(f"has an incomplete format key at index {start}")
+        if key_end - 1 == cursor + 1:
+            fail(f"has an empty format key at index {start}")
+        tail = _FORMAT_TAIL_RE.match(template, key_end)
+        if tail is None:
+            fail(f"has an invalid conversion at index {key_end}")
+        position = tail.end()
 
 
 @dataclass

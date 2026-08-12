@@ -96,13 +96,13 @@ def test_mapping_rejects_extension_keys_that_break_cef_structure():
     [
         # A malformed template used to render as "" and then silently fall the
         # header back to its default or drop the extension entirely.
-        ({"deviceVendor": "%(broken"}, "invalid format specifier"),
+        ({"deviceVendor": "%(broken"}, "incomplete format key"),
         ({"deviceVendor": "%q"}, "invalid format specifier"),
         ({"name": "100% clean"}, "invalid format specifier"),
         ({"deviceVendor": "%()s"}, "empty format key"),
         # "*" width consumes a positional argument a mapping cannot supply.
-        ({"extensions": {"src": "%(src)*d"}}, "invalid format specifier"),
-        ({"extensions": {"src": "%(broken"}}, "invalid format specifier"),
+        ({"extensions": {"src": "%(src)*d"}}, "invalid conversion"),
+        ({"extensions": {"src": "%(broken"}}, "incomplete format key"),
     ],
 )
 def test_malformed_templates_fail_before_rendering(mapping, message):
@@ -158,3 +158,29 @@ def test_stream_converter_rejects_a_malformed_mapping_at_construction():
 
     with pytest.raises(ValueError, match="invalid format specifier"):
         StreamConverter(mapping={"deviceVendor": "%q"})
+
+
+def test_unbalanced_format_key_is_rejected():
+    # Python counts nesting when scanning a mapping key, so "%(a(b)s" is an
+    # incomplete key that raises at render time and would otherwise be
+    # swallowed into a silently defaulted header.
+    with pytest.raises(ValueError, match="incomplete format key"):
+        convert_line("plain log", mapping={"deviceVendor": "%(a(b)s"})
+
+
+def test_nested_parentheses_in_a_format_key_are_accepted():
+    # "%((a))s" is a valid reference to the key "(a)"; rejecting it would
+    # fail a legal mapping.
+    assert convert_line(
+        "plain log", mapping={"deviceVendor": "%((a))s"}
+    ).startswith("CEF:0|")
+
+
+@pytest.mark.parametrize(
+    "template",
+    ["%(a)05d", "%(a)#x", "%(a)+d", "%(a) d", "%(a)ld", "%(a)e", "%(a).s"],
+)
+def test_full_conversion_syntax_is_accepted(template):
+    # Flags, width, precision and length modifiers are all valid syntax;
+    # whether a given value satisfies the conversion is data-dependent.
+    assert convert_line("plain log", mapping={"name": template}).startswith("CEF:0|")
