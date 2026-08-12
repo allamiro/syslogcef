@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from syslogcef.api import normalize_event, parse_syslog
+from syslogcef.api import convert_line, normalize_event, parse_syslog
 
 
 NOW = datetime(2023, 1, 2, tzinfo=timezone.utc)
@@ -47,3 +47,77 @@ def test_normalize_is_idempotent():
     line = "<166>Jan  1 12:34:56 fw1 app: hello"
     event = normalize_event(parse_syslog(line, now=NOW))
     assert normalize_event(event) is event
+
+
+def test_message_kv_cannot_override_parsed_metadata_for_mappings():
+    line = (
+        "<166>Jan  1 12:34:56 trusted app[42]: "
+        "host=evil app=spoof pid=999 severity=0 facility=0"
+    )
+    event = normalize_event(parse_syslog(line, now=NOW))
+    fields = event.as_field_dict()
+
+    # Keep the source values available as kv data, but the parsed syslog
+    # envelope is authoritative for the canonical metadata fields.
+    assert event.kv["host"] == "evil"
+    assert fields["host"] == "trusted"
+    assert fields["app"] == "app"
+    assert fields["pid"] == "42"
+    assert fields["severity"] == 6
+    assert fields["facility"] == 20
+
+    cef = convert_line(line, now=NOW, mapping={})
+    assert cef.split("|")[6] == "2"
+    assert "shost=trusted" in cef
+    assert "shost=evil" not in cef
+
+
+def test_field_names_are_case_normalized_without_losing_originals():
+    line = (
+        "<14>Jan  1 12:34:56 fw1 app: "
+        "SRCIP=10.1.1.1 DSTPORT=443 User=alice DeviceExternalId=abc"
+    )
+    event = normalize_event(parse_syslog(line, now=NOW))
+
+    assert event.kv["SRCIP"] == "10.1.1.1"
+    assert event.kv["srcip"] == "10.1.1.1"
+    assert event.kv["src"] == "10.1.1.1"
+    assert event.kv["dpt"] == "443"
+    assert event.kv["suser"] == "alice"
+    assert event.kv["deviceExternalId"] == "abc"
+
+
+def test_case_normalization_keeps_explicit_canonical_value():
+    line = "<14>Jan  1 12:34:56 fw1 app: srcip=99.9.9.9 SRC=10.0.0.1 action=x"
+    event = normalize_event(parse_syslog(line, now=NOW))
+
+    assert event.kv["src"] == "10.0.0.1"
+
+
+def test_canonical_casing_does_not_depend_on_message_order():
+    # The explicitly lowercase spelling must win regardless of which spelling
+    # appears first; the canonical key used to be built from whichever
+    # original spelling the iteration reached first.
+    for body in (
+        "DEVICEEXTERNALID=old deviceexternalid=new",
+        "deviceexternalid=new DEVICEEXTERNALID=old",
+    ):
+        event = normalize_event(
+            parse_syslog(f"<14>Jan  1 12:34:56 fw1 app: {body} a=1", now=NOW)
+        )
+        assert event.kv["deviceExternalId"] == "new"
+        assert event.kv["DEVICEEXTERNALID"] == "old"
+
+
+def test_empty_envelope_ts_orig_does_not_mask_payload_value():
+    # A record with no recognized envelope timestamp carries ts_orig="",
+    # which must count as absent rather than overwriting a payload value.
+    event = normalize_event(parse_syslog("ts_orig=device-clock foo=1 bar=2 baz=3"))
+    assert event.as_field_dict()["ts_orig"] == "device-clock"
+
+
+def test_parsed_ts_orig_still_wins_over_payload():
+    event = normalize_event(
+        parse_syslog("<166>Jan  1 12:34:56 h app: ts_orig=spoof a=1", now=NOW)
+    )
+    assert event.as_field_dict()["ts_orig"] == "Jan 1 12:34:56"

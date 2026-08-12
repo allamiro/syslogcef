@@ -124,6 +124,16 @@ def _looks_like_kv_line(body: str) -> bool:
     if len(matches) < 3:
         return False
     covered = sum(m.end() - m.start() for m in matches)
+    # KEY_VALUE_RE excludes a trailing comma from a value, where it used to
+    # be captured as part of it. Credit exactly those commas back so a
+    # comma-delimited stream of short values ("a=1, b=2, c=3, d=4") scores
+    # as it always did. Only commas are credited, and only in a gap that is
+    # nothing but separators: crediting whitespace too would newly qualify
+    # lines of prose that merely contain a few pairs.
+    for current, following in zip(matches, matches[1:]):
+        gap = body[current.end():following.start()]
+        if gap and not gap.strip(", \t"):
+            covered += gap.count(",")
     return covered >= 0.7 * len(body.strip())
 
 
@@ -609,6 +619,16 @@ def parse_kv_stream(line: str) -> ParsedEvent | None:
     if len(pairs) < 3:
         return None
 
+    # Device key names are commonly emitted in uppercase. Use a folded
+    # metadata view for parsing while preserving the exact originals in the
+    # message/normalizer. An explicitly lowercase spelling wins collisions.
+    pairs_ci: Dict[str, str] = {}
+    for key, value in pairs.items():
+        pairs_ci.setdefault(key.lower(), value)
+    for key, value in pairs.items():
+        if key == key.lower():
+            pairs_ci[key] = value
+
     # Timestamp candidates in preference order, each falling through to
     # the next when absent or unparseable (an invalid ts= must not mask
     # a valid eventtime=). Overflow/OSError cover out-of-range epoch
@@ -616,17 +636,17 @@ def parse_kv_stream(line: str) -> ParsedEvent | None:
     # ts_orig records the candidate that actually parsed.
     ts = None
     ts_orig = ""
-    if pairs.get("date") and pairs.get("time"):
+    if pairs_ci.get("date") and pairs_ci.get("time"):
         try:
-            ts = parse_iso8601(f"{pairs['date']}T{pairs['time']}")
-            ts_orig = f"{pairs['date']} {pairs['time']}"
+            ts = parse_iso8601(f"{pairs_ci['date']}T{pairs_ci['time']}")
+            ts_orig = f"{pairs_ci['date']} {pairs_ci['time']}"
         except (ValueError, OverflowError, OSError):
             ts = None
     if ts is None:
         # Each ISO alias tried independently: an invalid ts= must not
         # mask a valid timestamp= or datetime=.
         for iso_key in ("ts", "timestamp", "datetime"):
-            raw_iso = pairs.get(iso_key)
+            raw_iso = pairs_ci.get(iso_key)
             if not raw_iso:
                 continue
             try:
@@ -635,28 +655,29 @@ def parse_kv_stream(line: str) -> ParsedEvent | None:
                 break
             except (ValueError, OverflowError, OSError):
                 continue
-    if ts is None and pairs.get("eventtime", "").isdigit():
+    if ts is None and pairs_ci.get("eventtime", "").isdigit():
         try:
             # Full value: parse_iso8601 dispatches on digit count
             # (10/13/16/19), so Fortinet's 19-digit nanoseconds no
             # longer need lossy [:16] truncation.
-            ts = parse_iso8601(pairs["eventtime"])
-            ts_orig = pairs["eventtime"]
+            ts = parse_iso8601(pairs_ci["eventtime"])
+            ts_orig = pairs_ci["eventtime"]
         except (ValueError, OverflowError, OSError):
             ts = None
     if not ts_orig:
         ts_orig = (
-            f"{pairs.get('date', '')} {pairs.get('time', '')}".strip()
-            or pairs.get("ts")
-            or pairs.get("timestamp")
-            or pairs.get("datetime")
+            f"{pairs_ci.get('date', '')} {pairs_ci.get('time', '')}".strip()
+            or pairs_ci.get("ts")
+            or pairs_ci.get("timestamp")
+            or pairs_ci.get("datetime")
             or ""
         )
     if ts is not None and ts.tzinfo is None:
         # Apply a numeric offset supplied in the record (tz="-0500");
         # named zones (timezone="CEST") cannot be resolved portably.
         offset_match = re.fullmatch(
-            r"([+-])(\d{2}):?(\d{2})", pairs.get("tz") or pairs.get("timezone") or ""
+            r"([+-])(\d{2}):?(\d{2})",
+            pairs_ci.get("tz") or pairs_ci.get("timezone") or "",
         )
         if offset_match:
             sign = 1 if offset_match.group(1) == "+" else -1
@@ -671,11 +692,11 @@ def parse_kv_stream(line: str) -> ParsedEvent | None:
                 pass
 
     host = (
-        pairs.get("devname")
-        or pairs.get("device_name")
-        or pairs.get("dvchost")
-        or pairs.get("devid")
-        or pairs.get("device_id")
+        pairs_ci.get("devname")
+        or pairs_ci.get("device_name")
+        or pairs_ci.get("dvchost")
+        or pairs_ci.get("devid")
+        or pairs_ci.get("device_id")
     )
     return ParsedEvent(
         pri=pri,
@@ -684,9 +705,9 @@ def parse_kv_stream(line: str) -> ParsedEvent | None:
         ts=ts,
         ts_orig=ts_orig,
         host=host,
-        app=pairs.get("type") or pairs.get("log_type"),
+        app=pairs_ci.get("type") or pairs_ci.get("log_type"),
         pid=None,
-        msgid=pairs.get("logid") or pairs.get("log_id"),
+        msgid=pairs_ci.get("logid") or pairs_ci.get("log_id"),
         sd={},
         msg=body.strip(),
         raw=line,

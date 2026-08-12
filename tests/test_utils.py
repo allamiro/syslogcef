@@ -68,3 +68,39 @@ def test_parse_key_value_pairs():
     assert pairs["dst"] == "10.0.0.2"
     assert pairs["user"] == "bob"
     assert pairs["action"] == "allow"
+
+
+def test_parse_key_value_pairs_handles_escaped_quotes_and_commas():
+    pairs = parse_key_value_pairs(
+        r'reason="user said \"hello\"" src=10.0.0.1,dst=10.0.0.2 note=one,two'
+    )
+
+    assert pairs["reason"] == 'user said "hello"'
+    assert pairs["src"] == "10.0.0.1"
+    assert pairs["dst"] == "10.0.0.2"
+    assert pairs["note"] == "one,two"
+
+
+def test_comma_delimited_kv_stream_is_still_detected():
+    # KEY_VALUE_RE excludes the trailing separator from a value, so the
+    # coverage heuristic must count inter-pair delimiters or a stream of
+    # short comma-separated values falls below the threshold.
+    from syslogcef.parsers import _looks_like_kv_line
+
+    assert _looks_like_kv_line("a=1, b=2, c=3, d=4")
+    assert _looks_like_kv_line("src=1.1.1.1, dst=2.2.2.2, act=allow")
+    # Prose with a few embedded pairs must still be rejected.
+    assert not _looks_like_kv_line(
+        "the quick brown fox jumped over a=1 lazy dog b=2 and c=3 more padding"
+    )
+
+
+def test_kv_coverage_does_not_over_claim_prose_with_pairs():
+    # Only commas are credited back, and only inside separator-only gaps, so
+    # a line of text that merely contains a few pairs is not claimed as kv.
+    from syslogcef.parsers import _looks_like_kv_line
+
+    assert not _looks_like_kv_line("up, a=1, b=2, c=3")
+    assert not _looks_like_kv_line(
+        "the quick brown fox jumped over a=1 lazy dog b=2 and c=3 more padding"
+    )

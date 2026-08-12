@@ -175,8 +175,11 @@ normalized event's fields:
   the message and any RFC5424 structured-data or journald fields.
 
 Field templates that reference missing keys resolve to an empty string
-rather than failing the event. See [docs/cef_fields.md](docs/cef_fields.md)
-for the full CEF extension dictionary.
+rather than failing the event. Mapping files and Python mapping dictionaries
+are validated before rendering; malformed templates, severity maps, and CEF
+extension keys fail with a configuration error instead of corrupting a record.
+See [docs/cef_fields.md](docs/cef_fields.md) for the full CEF extension
+dictionary.
 
 ## Field Dictionary
 
@@ -194,7 +197,10 @@ knowledge, derived from the ArcSight Extension Dictionary (see
   are applied during normalization for **every** event — including
   key=value pairs extracted from adaptively-parsed unknown formats — so
   mappings and validation always see canonical names. Original keys are
-  preserved and an explicit canonical key is never overwritten.
+  preserved and an explicit canonical key is never overwritten. Source key
+  casing is normalized as well (`SRCIP`, `SrcIp`, and `srcip` all make `src`
+  available), while parsed syslog envelope fields such as host and severity
+  remain authoritative over same-named text in the message.
 
 This means a Fortinet-style `srcip=10.1.1.1 dstport=443` and an unknown
 device emitting the same pairs behind an unrecognized prefix both end up

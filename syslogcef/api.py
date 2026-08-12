@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -11,9 +12,71 @@ from .parsers import ParsedEvent, ParserError, autodetect_and_parse
 from .normalizer import NormalizedEvent, normalize
 from .utils import sanitize_message
 from .mappings import CISCO_ASA, CISCO_IOS, F5, FORTINET, LINUX, SOPHOS, VMWARE
-from .cef import CEFEvent, build_cef
+from .cef import HEADER_KEYS, CEFEvent, build_cef
 
 logger = logging.getLogger(__name__)
+
+_EXTENSION_KEY_RE = re.compile(r"^[A-Za-z0-9_.]+$")
+
+# What may follow a mapping key in ``template % fields``: flags, width,
+# precision, length modifier, conversion. A width/precision of "*" is
+# deliberately excluded because it consumes a positional argument a mapping
+# cannot supply. A bare "." precision is legal Python (it means zero).
+_FORMAT_TAIL_RE = re.compile(r"[#0\- +]*\d*(?:\.\d*)?[hlL]?[diouxXeEfFgGcrsa]")
+
+
+def _scan_format_key(template: str, start: int) -> int:
+    """Return the index just past a mapping key's closing paren, or -1.
+
+    Mirrors CPython's own scan, which counts nesting rather than stopping at
+    the first ")": "%((a))s" is a valid reference to the key "(a)", while
+    "%(a(b)s" is an incomplete key that raises at render time.
+    """
+    depth = 1
+    for index in range(start, len(template)):
+        if template[index] == "(":
+            depth += 1
+        elif template[index] == ")":
+            depth -= 1
+            if depth == 0:
+                return index + 1
+    return -1
+
+
+def _validate_template(template: str, where: str, what: str) -> None:
+    """Reject a template that cannot render, before any record is produced.
+
+    ``MappingResolver._format`` swallows a rendering failure and returns "",
+    which silently falls a header back to its default or drops an extension.
+    A malformed template is a configuration error, so surface it eagerly.
+    """
+
+    def fail(problem: str) -> None:
+        raise ValueError(f"{where}: {what} template {template!r} {problem}")
+
+    position = 0
+    while True:
+        start = template.find("%", position)
+        if start == -1:
+            return
+        cursor = start + 1
+        if cursor < len(template) and template[cursor] == "%":
+            position = cursor + 1
+            continue
+        if cursor >= len(template) or template[cursor] != "(":
+            fail(
+                f"has an invalid format specifier at index {start} "
+                "(use '%%' for a literal percent)"
+            )
+        key_end = _scan_format_key(template, cursor + 1)
+        if key_end == -1:
+            fail(f"has an incomplete format key at index {start}")
+        if key_end - 1 == cursor + 1:
+            fail(f"has an empty format key at index {start}")
+        tail = _FORMAT_TAIL_RE.match(template, key_end)
+        if tail is None:
+            fail(f"has an invalid conversion at index {key_end}")
+        position = tail.end()
 
 
 @dataclass
@@ -62,23 +125,69 @@ def normalize_event(event: ParsedEvent | NormalizedEvent) -> NormalizedEvent:
     return normalize(event)
 
 
+class _ValidatedMapping(dict):
+    """A mapping that has already passed structural validation.
+
+    ``to_cef`` loads its mapping per event, so a long stream would otherwise
+    re-run template and severity-map validation for every record. Callers
+    that convert many events (``StreamConverter``, the CLI) validate once and
+    pass the result back in; this marker lets the second load short-circuit.
+    """
+
+
 def _load_mapping(mapping: Mapping[str, Any] | Path | str | None) -> Mapping[str, Any]:
     if mapping is None:
         return {}
-    if isinstance(mapping, Mapping):
+    if isinstance(mapping, _ValidatedMapping):
         return mapping
-    path = Path(mapping)
-    with path.open("r", encoding="utf-8") as fp:
-        data = json.load(fp)
+    if isinstance(mapping, Mapping):
+        data = mapping
+        where = "mapping"
+    else:
+        path = Path(mapping)
+        with path.open("r", encoding="utf-8") as fp:
+            data = json.load(fp)
+        where = str(path)
     # Structural validation with clear messages: a top-level array would
     # otherwise TypeError deep inside the renderer, and a wrong-shaped
     # extensions/severity_map would fail per event instead of up front.
-    if not isinstance(data, dict):
-        raise ValueError(f"{path}: mapping must be a JSON object")
+    if not isinstance(data, Mapping):
+        raise ValueError(f"{where}: mapping must be a JSON object")
     for key in ("extensions", "severity_map"):
-        if key in data and not isinstance(data[key], dict):
-            raise ValueError(f"{path}: '{key}' must be a JSON object")
-    return data
+        if key in data and not isinstance(data[key], Mapping):
+            raise ValueError(f"{where}: '{key}' must be an object")
+    for key in HEADER_KEYS:
+        if key in data:
+            if not isinstance(data[key], str):
+                raise ValueError(f"{where}: '{key}' must be a string")
+            _validate_template(data[key], where, f"header {key!r}")
+    for key, template in data.get("extensions", {}).items():
+        if not isinstance(key, str) or not _EXTENSION_KEY_RE.fullmatch(key):
+            raise ValueError(f"{where}: invalid extension key {key!r}")
+        if not isinstance(template, str):
+            raise ValueError(
+                f"{where}: extension template for {key!r} must be a string"
+            )
+        _validate_template(template, where, f"extension {key!r}")
+    for source, target in data.get("severity_map", {}).items():
+        source_text, target_text = str(source), str(target)
+        if not (
+            source_text.isascii() and source_text.isdigit()
+            and len(source_text) == 1
+            and 0 <= int(source_text) <= 7
+        ):
+            raise ValueError(
+                f"{where}: severity_map key {source!r} must be an integer from 0 to 7"
+            )
+        if not (
+            target_text.isascii() and target_text.isdigit()
+            and len(target_text) <= 2
+            and 0 <= int(target_text) <= 10
+        ):
+            raise ValueError(
+                f"{where}: severity_map value {target!r} must be an integer from 0 to 10"
+            )
+    return _ValidatedMapping(data)
 
 
 def to_cef(
@@ -149,7 +258,9 @@ class StreamConverter:
         strict: bool = False,
     ) -> None:
         self.mode = mode
-        self.mapping = mapping
+        # Validate the mapping once here rather than per converted line, and
+        # surface a malformed mapping before any record is emitted.
+        self.mapping = None if mapping is None else _load_mapping(mapping)
         self.validate = validate
         self.strict = strict
         self._contexts: dict[str, ParsedEvent] = {}

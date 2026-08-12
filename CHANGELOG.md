@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Adaptive parsing no longer lets a cached hostless layout suppress hosts on
+  later lines with the same reduced signature. Cached hosts now normalize
+  trailing delimiters consistently, named timezone remnants are not treated
+  as hosts, IP host tokens are accepted, and `ts_orig` is retained.
+- Normalization now treats parsed syslog envelope metadata as authoritative
+  over same-named message key/value pairs, preventing payload fields such as
+  `host=` and `severity=` from changing mapped metadata. Field-name matching
+  is case-insensitive while original spellings remain available.
+- Key/value extraction supports escaped quotes and comma-delimited pairs
+  without splitting ordinary comma-containing values.
+- Python mapping dictionaries receive the same eager structural validation as
+  JSON mapping files. Invalid header/extension templates, severity maps, and
+  extension keys now fail clearly instead of raising during rendering or
+  producing structurally invalid CEF.
+- Malformed `%`-format templates are rejected when the mapping is loaded
+  rather than degrading silently per event. Previously a template such as
+  `%{msgid}` or a literal `100% clean` rendered as an empty string, which
+  fell a header back to its default or dropped an extension without any
+  indication in the output. Use `%%` for a literal percent sign. Templates
+  whose syntax is valid but whose conversion a given value cannot satisfy
+  (`%(dpt)d` against a non-numeric field) still degrade gracefully at render
+  time, so a malformed mapping can no longer be discovered only after
+  millions of records have been written.
+- Case normalization of canonical CEF keys no longer depends on the order
+  fields appear in a message: an explicitly lowercase `deviceexternalid=`
+  now wins over `DEVICEEXTERNALID=` in either order.
+- A record with no recognized envelope timestamp no longer hides a payload
+  `ts_orig=` value: an empty envelope timestamp counts as absent rather
+  than overwriting the message field.
+- Comma-delimited key/value streams of short values (`a=1, b=2, c=3`) are
+  still detected as key/value records now that separators are excluded from
+  matched values.
+- More named timezone abbreviations (BST, IST, JST, KST, AEST, MSK, NZDT,
+  SAST and similar) are rejected as adaptive hostnames. Abbreviations that
+  double as ordinary words (WEST, CAT, EAT, ART) are deliberately still
+  accepted, since dropping a genuine short hostname is the worse failure.
+- A hostname followed by a multi-character delimiter (`host::`, `host:,`)
+  is recognized again on both the analysis and cached adaptive paths.
+- Mapping validation runs once per stream instead of once per record, so a
+  malformed mapping is reported when `StreamConverter` is constructed and
+  long runs do not re-validate templates for every event.
+
+### Changed
+
+- **Behavior change.** A mapping with a malformed template is now a
+  configuration error (`ValueError`) instead of being tolerated with
+  degraded output. All bundled mappings validate cleanly; a custom mapping
+  that relied on the previous silent fallback must quote literal percent
+  signs as `%%`.
+
 ## [0.3.2] - 2026-08-12
 
 ### Fixed

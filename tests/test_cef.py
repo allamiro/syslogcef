@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from syslogcef.api import convert_line, normalize_event, parse_syslog, to_cef
 from syslogcef.mappings import CISCO_ASA, load_mapping
 
@@ -18,6 +20,11 @@ def test_custom_severity_map_overrides_default():
     mapping = dict(CISCO_ASA)
     mapping["severity_map"] = {"6": "9"}
     cef = convert_line(ASA_LINE, mapping=mapping)
+    assert cef.split("|")[6] == "9"
+
+
+def test_programmatic_severity_map_accepts_integer_keys_and_values():
+    cef = convert_line(ASA_LINE, mapping={"severity_map": {6: 9}})
     assert cef.split("|")[6] == "9"
 
 
@@ -62,3 +69,118 @@ def test_load_mapping_by_name():
         pass
     else:
         raise AssertionError("expected KeyError for unknown mapping name")
+
+
+@pytest.mark.parametrize(
+    "mapping, message",
+    [
+        ({"extensions": ["src"]}, "'extensions' must be an object"),
+        ({"severity_map": None}, "'severity_map' must be an object"),
+        ({"extensions": {"src": 123}}, "extension template for 'src' must be a string"),
+        ({"deviceVendor": 123}, "'deviceVendor' must be a string"),
+        ({"severity_map": {"6": "urgent"}}, "severity_map value"),
+    ],
+)
+def test_programmatic_mapping_is_validated(mapping, message):
+    with pytest.raises(ValueError, match=message):
+        convert_line("plain log", mapping=mapping)
+
+
+def test_mapping_rejects_extension_keys_that_break_cef_structure():
+    with pytest.raises(ValueError, match="invalid extension key"):
+        convert_line("plain log", mapping={"extensions": {"bad key": "value"}})
+
+
+@pytest.mark.parametrize(
+    "mapping, message",
+    [
+        # A malformed template used to render as "" and then silently fall the
+        # header back to its default or drop the extension entirely.
+        ({"deviceVendor": "%(broken"}, "incomplete format key"),
+        ({"deviceVendor": "%q"}, "invalid format specifier"),
+        ({"name": "100% clean"}, "invalid format specifier"),
+        ({"deviceVendor": "%()s"}, "empty format key"),
+        # "*" width consumes a positional argument a mapping cannot supply.
+        ({"extensions": {"src": "%(src)*d"}}, "invalid conversion"),
+        ({"extensions": {"src": "%(broken"}}, "incomplete format key"),
+    ],
+)
+def test_malformed_templates_fail_before_rendering(mapping, message):
+    with pytest.raises(ValueError, match=message):
+        convert_line("plain log", mapping=mapping)
+
+
+@pytest.mark.parametrize(
+    "mapping",
+    [
+        {"deviceVendor": "%(host)s"},
+        {"name": "100%% clean"},
+        {"deviceVendor": "Acme"},
+        {"extensions": {"src": "%(src)s:%(spt)s"}},
+        # Numeric conversions are syntactically valid; whether a given field
+        # can satisfy one is data-dependent and handled at render time.
+        {"extensions": {"sev": "%(severity)03d"}},
+    ],
+)
+def test_valid_templates_are_accepted(mapping):
+    assert convert_line(
+        "<14>Jan  1 12:34:56 fw1 app: src=1.1.1.1 spt=5", mapping=mapping
+    ).startswith("CEF:0|")
+
+
+def test_literal_percent_template_renders():
+    cef = convert_line("plain log", mapping={"name": "100%% clean"})
+    assert cef.split("|")[5] == "100% clean"
+
+
+@pytest.mark.parametrize("template", ["%(msg).s", "%(msg).3s", "%(msg)-10.2s"])
+def test_precision_templates_are_accepted(template):
+    # A bare "." precision is legal Python (precision zero); rejecting it
+    # would fail valid user mappings before rendering.
+    assert convert_line("plain log", mapping={"name": template}).startswith("CEF:0|")
+
+
+def test_mapping_is_validated_once_for_a_stream():
+    from syslogcef.api import StreamConverter, _load_mapping, _ValidatedMapping
+
+    validated = _load_mapping({"deviceVendor": "Acme"})
+    assert isinstance(validated, _ValidatedMapping)
+    # Re-loading an already-validated mapping short-circuits, so a long
+    # stream does not re-validate templates for every record.
+    assert _load_mapping(validated) is validated
+
+    converter = StreamConverter(mapping={"deviceVendor": "Acme"})
+    assert isinstance(converter.mapping, _ValidatedMapping)
+
+
+def test_stream_converter_rejects_a_malformed_mapping_at_construction():
+    from syslogcef.api import StreamConverter
+
+    with pytest.raises(ValueError, match="invalid format specifier"):
+        StreamConverter(mapping={"deviceVendor": "%q"})
+
+
+def test_unbalanced_format_key_is_rejected():
+    # Python counts nesting when scanning a mapping key, so "%(a(b)s" is an
+    # incomplete key that raises at render time and would otherwise be
+    # swallowed into a silently defaulted header.
+    with pytest.raises(ValueError, match="incomplete format key"):
+        convert_line("plain log", mapping={"deviceVendor": "%(a(b)s"})
+
+
+def test_nested_parentheses_in_a_format_key_are_accepted():
+    # "%((a))s" is a valid reference to the key "(a)"; rejecting it would
+    # fail a legal mapping.
+    assert convert_line(
+        "plain log", mapping={"deviceVendor": "%((a))s"}
+    ).startswith("CEF:0|")
+
+
+@pytest.mark.parametrize(
+    "template",
+    ["%(a)05d", "%(a)#x", "%(a)+d", "%(a) d", "%(a)ld", "%(a)e", "%(a).s"],
+)
+def test_full_conversion_syntax_is_accepted(template):
+    # Flags, width, precision and length modifiers are all valid syntax;
+    # whether a given value satisfies the conversion is data-dependent.
+    assert convert_line("plain log", mapping={"name": template}).startswith("CEF:0|")

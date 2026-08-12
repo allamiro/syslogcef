@@ -3,6 +3,8 @@ from __future__ import annotations
 """Tests for the new format parsers and the adaptive pattern detector."""
 
 
+import pytest
+
 from syslogcef import convert_line, normalize_event, parse_syslog
 from syslogcef.adaptive import cache_size, clear_cache
 
@@ -188,3 +190,130 @@ def test_adaptive_cached_empty_message_preserved():
     ev2 = parse_syslog("2021/05/02 11:00:00 fw-edge-02")
     assert ev2.host == "fw-edge-02"
     assert ev2.msg == ""
+
+
+def test_adaptive_hostless_line_does_not_poison_host_learning():
+    clear_cache()
+    first = parse_syslog("2021/05/01 10:00:00 ERROR link down")
+    assert first.host is None
+
+    # ERROR and an alphabetic hostname have the same reduced signature.
+    # A hostless cached pattern must not suppress the valid host later.
+    second = parse_syslog("2021/05/02 11:00:00 firewall session established")
+    assert second.source_hint == "adaptive"
+    assert second.host == "firewall"
+    assert second.msg == "session established"
+
+
+def test_adaptive_cached_host_strips_delimiter_consistently():
+    clear_cache()
+    first = parse_syslog("2021/05/01 10:00:00 fw-edge-01, session established")
+    second = parse_syslog("2021/05/02 11:00:00 fw-edge-02, session ended")
+
+    assert first.host == "fw-edge-01"
+    assert second.host == "fw-edge-02"
+
+
+def test_adaptive_preserves_original_timestamp_text():
+    clear_cache()
+    first = parse_syslog("2021/05/01 10:00:00 fw1 session established")
+    second = parse_syslog("2021/05/02 11:00:00 fw2 session ended")
+
+    assert first.ts_orig == "2021/05/01 10:00:00"
+    assert second.ts_orig == "2021/05/02 11:00:00"
+
+
+def test_adaptive_named_timezone_is_not_a_host():
+    clear_cache()
+    event = parse_syslog("2021/05/01 10:00:00 CEST firewall session established")
+
+    assert event.source_hint == "adaptive"
+    assert event.host is None
+    assert event.msg.startswith("CEST ")
+
+
+def test_adaptive_accepts_ipv6_host_tokens_on_fresh_and_cached_paths():
+    clear_cache()
+    first = parse_syslog("2021/05/01 10:00:00 2001:db8::1 session established")
+    second = parse_syslog("2021/05/02 11:00:00 2001:db8::2 session ended")
+
+    assert first.host == "2001:db8::1"
+    assert second.host == "2001:db8::2"
+
+
+def test_uppercase_kv_metadata_and_aliases_are_normalized():
+    line = (
+        "DATE=2020-04-23 TIME=12:32:48 DEVNAME=fw1 "
+        "LOGID=0100000001 LEVEL=warning SRCIP=10.1.1.1"
+    )
+    event = normalize_event(parse_syslog(line))
+
+    assert event.ts.year == 2020
+    assert event.host == "fw1"
+    assert event.severity == 4
+    assert event.kv["src"] == "10.1.1.1"
+    assert fields(convert_line(line))[1] == "Fortinet"
+
+
+def test_adaptive_multi_character_host_delimiter():
+    # The analysis path always stripped the whole trailing ":,"" run; the
+    # cached path must not regress to removing only one character.
+    for line, expected in (
+        ("2021/05/01 10:00:00 fw-edge-01:: session up", "fw-edge-01"),
+        ("2021/05/01 10:00:00 fw-edge-02:, session up", "fw-edge-02"),
+    ):
+        clear_cache()
+        assert parse_syslog(line).host == expected
+
+
+@pytest.mark.parametrize("zone", ["BST", "JST", "AEST", "MSK", "NZDT", "SAST"])
+def test_adaptive_additional_named_timezones_are_not_hosts(zone):
+    clear_cache()
+    event = parse_syslog(f"2021/05/01 10:00:00 {zone} fw1 session up")
+    assert event.host is None
+
+
+@pytest.mark.parametrize("token", ["west", "cat", "art", "eat"])
+def test_adaptive_english_word_hostnames_are_still_accepted(token):
+    # Timezone abbreviations that double as ordinary words must not be
+    # skipped, or genuine short hostnames would be dropped.
+    clear_cache()
+    assert parse_syslog(f"2021/05/01 10:00:00 {token} session up").host == token
+
+
+@pytest.mark.parametrize("host", ["2001:db8::", "fe80::", "2001:db8::1"])
+def test_adaptive_compressed_ipv6_host_is_not_truncated(host):
+    # A compressed IPv6 literal may legitimately end in "::"; stripping
+    # trailing delimiters must not corrupt it, on either code path.
+    clear_cache()
+    assert parse_syslog(f"2021/05/01 10:00:00 {host} session up").host == host
+    assert parse_syslog(f"2021/05/02 11:00:00 {host} session down").host == host
+
+
+@pytest.mark.parametrize(
+    "token, expected",
+    [
+        ("2001:db8::", "2001:db8::"),
+        ("2001:db8::,", "2001:db8::"),
+        ("fe80::,", "fe80::"),
+        ("2001:db8::1,", "2001:db8::1"),
+        ("10.1.1.5,", "10.1.1.5"),
+        ("fw-edge-01::", "fw-edge-01"),
+        ("fw-edge-01:,", "fw-edge-01"),
+        ("fw1:", "fw1"),
+        ("fw1", "fw1"),
+    ],
+)
+def test_host_token_delimiter_stripping(token, expected):
+    from syslogcef.adaptive import _normalize_host_token
+
+    assert _normalize_host_token(token) == expected
+
+
+@pytest.mark.parametrize("host", ["2001:db8::", "fe80::", "2001:db8::1", "10.1.1.5"])
+def test_adaptive_ip_host_followed_by_comma(host):
+    # Neither the whole token nor a full ":," strip yields the address when a
+    # compressed literal ending in "::" is followed by a delimiter.
+    clear_cache()
+    assert parse_syslog(f"2021/05/01 10:00:00 {host}, session up").host == host
+    assert parse_syslog(f"2021/05/02 11:00:00 {host}, session down").host == host

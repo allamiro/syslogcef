@@ -15,7 +15,7 @@ import re
 from datetime import datetime, timezone
 from typing import Callable, Dict, Optional, Pattern, Tuple
 
-from .utils import convert_pri, month_abbr_to_int, parse_iso8601, sanitize_message
+from .utils import convert_pri, is_ip, month_abbr_to_int, parse_iso8601, sanitize_message
 
 PRI_RE = re.compile(r"^<(\d{1,3})>")
 
@@ -69,7 +69,20 @@ TIMESTAMP_LIB: Tuple[Tuple[str, str, Callable], ...] = (
 )
 
 HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
-_SKIP_HOST_TOKENS = {"error", "warning", "info", "debug", "notice", "kernel"}
+_SKIP_HOST_TOKENS = {
+    "alert", "crit", "critical", "debug", "emerg", "emergency", "err",
+    "error", "info", "information", "informational", "kernel", "notice",
+    "panic", "warn", "warning",
+    # Common named timezone remnants. The timestamp shapes deliberately do
+    # not pretend to resolve named zones, but these must not become hosts.
+    # Abbreviations that double as ordinary English words (WEST, CAT, EAT,
+    # ART) are deliberately excluded: rejecting them would drop genuine
+    # short hostnames, which is the worse failure of the two.
+    "utc", "gmt", "cet", "cest", "eet", "eest", "est", "edt", "cst",
+    "cdt", "mst", "mdt", "pst", "pdt", "bst", "ist", "idt", "jst",
+    "kst", "aest", "aedt", "acst", "acdt", "awst", "nzst", "nzdt",
+    "msk", "hst", "akst", "akdt", "sast", "brt", "clt",
+}
 
 # Syslog-style program tag following the host: "app:", "app[pid]:".
 TAG_RE = re.compile(r"^(?P<app>[\w\-/\.]+)(?:\[(?P<pid>[^\]]+)\])?:$")
@@ -78,13 +91,38 @@ _TAG_SRC = r"(?:(?P<adaptive_app>[\w\-/\.]+)(?:\[(?P<adaptive_pid>[^\]]+)\])?:\s
 
 
 def _valid_host(candidate: Optional[str]) -> bool:
-    return bool(
-        candidate
-        and "=" not in candidate
-        and HOST_RE.match(candidate)
-        and candidate.lower() not in _SKIP_HOST_TOKENS
-        and not candidate.isdigit()
-    )
+    if not candidate or "=" in candidate or candidate.lower() in _SKIP_HOST_TOKENS:
+        return False
+    # Adaptive layouts sometimes use a literal IP in the hostname slot.
+    # Check it before rejecting all-numeric tokens.
+    if is_ip(candidate):
+        return True
+    return bool(HOST_RE.fullmatch(candidate) and not candidate.isdigit())
+
+
+def _normalize_host_token(token: str) -> str:
+    """Strip trailing layout delimiters from a host token.
+
+    A token that is already a valid address is returned untouched: a
+    compressed IPv6 literal may legitimately end in "::" ("2001:db8::",
+    "fe80::"), and stripping that would silently corrupt the host. Anything
+    else has its whole trailing ":," run removed, so multi-character layout
+    delimiters ("host::", "host:,") work as the analysis path always did.
+    """
+    if is_ip(token):
+        return token
+    # A layout delimiter may follow a compressed literal that itself ends in
+    # "::" ("2001:db8::,"), where neither the whole token nor a full strip
+    # yields the address. Remove one trailing separator at a time and keep
+    # the first candidate that parses, falling back to the fully stripped
+    # token for ordinary hostnames ("host::", "host:,").
+    candidate = token
+    while candidate and candidate[-1] in ":,":
+        candidate = candidate[:-1]
+        if is_ip(candidate):
+            return candidate
+    return candidate
+
 
 _CACHE: Dict[str, Tuple[Pattern[str], str, Callable]] = {}
 _CACHE_MAX = 256
@@ -114,7 +152,7 @@ def cache_size() -> int:
     return len(_CACHE)
 
 
-def _build_event(line, pri, ts, host, msg, app=None, pid=None):
+def _build_event(line, pri, ts, host, msg, app=None, pid=None, ts_orig=""):
     from .parsers import ParsedEvent
 
     facility, severity = convert_pri(pri)
@@ -123,7 +161,7 @@ def _build_event(line, pri, ts, host, msg, app=None, pid=None):
         facility=facility,
         severity=severity,
         ts=ts,
-        ts_orig="",
+        ts_orig=ts_orig,
         host=host,
         app=app,
         pid=pid,
@@ -156,18 +194,22 @@ def adaptive_parse(line: str, *, now: Optional[datetime] = None):
             except (ValueError, KeyError):
                 ts = None
             gd = match.groupdict()
-            host = gd.get("adaptive_host")
+            ts_orig = match.group("adaptive_ts")
+            host_token = gd.get("adaptive_host_token")
+            host = _normalize_host_token(host_token) if host_token else None
             app = gd.get("adaptive_app")
             pid = gd.get("adaptive_pid")
             msg = gd.get("adaptive_msg")
             msg = line if msg is None else msg
             # The shape signature reduces all words to the same class, so a
             # cached host slot may capture a non-host token; revalidate.
-            if host is not None and not _valid_host(host.rstrip(":,")):
+            if host_token is not None and not _valid_host(host):
                 tag = f"{app}[{pid}]: " if app and pid else (f"{app}: " if app else "")
-                msg = f"{host} {tag}{msg}".strip()
+                msg = f"{host_token} {tag}{msg}".strip()
                 host = app = pid = None
-            return _build_event(raw, pri, ts, host, msg, app=app, pid=pid)
+            return _build_event(
+                raw, pri, ts, host, msg, app=app, pid=pid, ts_orig=ts_orig
+            )
 
     # Analysis pass: find the earliest timestamp in the line head.
     best = None
@@ -194,7 +236,7 @@ def adaptive_parse(line: str, *, now: Optional[datetime] = None):
     msg = rest
     tokens = rest.split(None, 1)
     if tokens:
-        candidate = tokens[0].rstrip(":,")
+        candidate = _normalize_host_token(tokens[0])
         if _valid_host(candidate):
             host = candidate
             msg = tokens[1] if len(tokens) > 1 else ""
@@ -213,19 +255,27 @@ def adaptive_parse(line: str, *, now: Optional[datetime] = None):
     prefix = line[: ts_match.start()]
     parts = [re.escape(prefix), f"(?P<adaptive_ts>{src})", r"[\s:,]*"]
     if host is not None:
-        parts.append(r"(?P<adaptive_host>\S+?):?(?:\s+|$)")
+        # Capture the complete token. Normalizing punctuation after the
+        # match keeps first-sight and cached results identical and avoids
+        # treating the final colon of an IPv6 address as a separator.
+        parts.append(r"(?P<adaptive_host_token>\S+)(?:\s+|$)")
         parts.append(_TAG_SRC)
     parts.append(r"(?P<adaptive_msg>.*)$")
     try:
         pattern = re.compile("".join(parts))
     except re.error:
         pattern = None
-    if pattern is not None and pattern.match(line):
+    # A hostless pattern is not stable enough to reuse: severity/timezone
+    # words and plain alphabetic hostnames collapse to the same signature.
+    # Caching it would suppress a valid host on a later line of that shape.
+    if host is not None and pattern is not None and pattern.match(line):
         if len(_CACHE) >= _CACHE_MAX:
             _CACHE.pop(next(iter(_CACHE)))
         _CACHE[sig] = (pattern, name, conv)
 
-    return _build_event(raw, pri, ts, host, msg, app=app, pid=pid)
+    return _build_event(
+        raw, pri, ts, host, msg, app=app, pid=pid, ts_orig=ts_match.group(0)
+    )
 
 
 def pattern_ts_match(pattern: Pattern[str], match: "re.Match[str]"):

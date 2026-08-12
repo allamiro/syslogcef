@@ -9,6 +9,12 @@ from .utils import cef_escape, cef_escape_header
 
 logger = logging.getLogger(__name__)
 
+# The CEF:0 header slots a mapping may supply a template for, in wire order.
+# Single source of truth: mapping validation in api.py checks exactly these.
+HEADER_KEYS = (
+    "deviceVendor", "deviceProduct", "deviceVersion", "eventClassId", "name",
+)
+
 
 DEFAULT_MAPPING = {
     "deviceVendor": "Generic",
@@ -68,7 +74,7 @@ class MappingResolver:
 
     def resolve_header(self, fields: Mapping[str, Any]) -> Dict[str, str]:
         header = {}
-        for key in ["deviceVendor", "deviceProduct", "deviceVersion", "eventClassId", "name"]:
+        for key in HEADER_KEYS:
             template = self.mapping.get(key, DEFAULT_MAPPING[key])
             value = self._format(template, fields)
             if not value:
@@ -81,7 +87,13 @@ class MappingResolver:
         return header
 
     def _resolve_severity(self, fields: Mapping[str, Any]) -> str:
-        severity_map = {**DEFAULT_MAPPING["severity_map"], **self.mapping.get("severity_map", {})}
+        severity_map = DEFAULT_MAPPING["severity_map"].copy()
+        # Programmatic mappings may naturally use integer keys/values while
+        # JSON mappings always contain strings. Normalize both forms so a
+        # validated {6: 9} override behaves like {"6": "9"}.
+        severity_map.update(
+            {str(key): str(value) for key, value in self.mapping.get("severity_map", {}).items()}
+        )
         value = fields.get("severity")
         if value is None and "pri" in fields:
             # "pri" may come from an untrusted kv pair (pri=zzz), not just
