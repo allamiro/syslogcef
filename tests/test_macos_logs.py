@@ -236,7 +236,8 @@ class TestDvcpidNumericOnly:
 
 class TestSyslogHostIsSource:
     """The syslog HOSTNAME is the device that generated the event, so it
-    maps to shost/dvchost (source/device), never dhost (destination)."""
+    maps to shost (source host), never dhost (destination). shost, not
+    dvchost: RFC 5424 hostnames can exceed dvchost's 100-char limit."""
 
     def test_linux_mapping_host_is_shost_not_dhost(self):
         from syslogcef import convert_line
@@ -245,14 +246,29 @@ class TestSyslogHostIsSource:
             "<13>Aug 10 13:39:25 clay-wks-linux-15 kernel: docker0: port 1 entered blocking state"
         )
         assert "shost=clay-wks-linux-15" in cef
-        assert "dvchost=clay-wks-linux-15" in cef
         assert "dhost=" not in cef
+        assert "dvchost=" not in cef
 
     def test_default_mapping_surfaces_host_as_source(self):
-        # An unknown-vendor line (no bundled mapping) still surfaces the
-        # host as shost via the default mapping.
+        # Exercise DEFAULT_MAPPING directly: a minimal custom mapping with
+        # no extensions falls through to the default extension set, so the
+        # default's shost is what surfaces (mapping=None would route via
+        # _guess_mapping to the bundled LINUX mapping instead).
         from syslogcef import convert_line
 
-        cef = convert_line("<13>Aug 10 13:39:25 gw-01 weirdproc: unrecognized payload zzz")
+        cef = convert_line(
+            "<13>Aug 10 13:39:25 gw-01 weirdproc: payload zzz",
+            mapping={"deviceVendor": "Acme", "deviceProduct": "Thing"},
+        )
+        assert "|Acme|Thing|" in cef  # confirms the custom (default-based) mapping ran
         assert "shost=gw-01" in cef
         assert "dhost=" not in cef
+
+    def test_long_hostname_passes_strict(self):
+        # A 200-char hostname (valid per RFC 5424, > dvchost's 100 limit)
+        # must not fail --strict — which is why host maps to shost (1023).
+        from syslogcef import convert_line
+
+        host = "h" * 200
+        cef = convert_line(f"<13>Aug 10 13:39:25 {host} app: msg", strict=True)
+        assert f"shost={host}" in cef

@@ -6,7 +6,6 @@
   "name": "%(message_short)s",
   "extensions": {
     "shost": "%(host)s",
-    "dvchost": "%(host)s",
     "sproc": "%(app)s",
     "dvcpid": "%(dvcpid)s",
     "cs1Label": "rawEvent",
